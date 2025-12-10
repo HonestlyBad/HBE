@@ -1,0 +1,14 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="HBE.Core/HBE.Core.vcxproj" Id="1fbc35c6-d958-48ed-8d6f-63b6e543411b" />
+  <Project Path="HBE.Platform.SDL/HBE.Platform.SDL.vcxproj" Id="f47806b3-d913-4706-ba37-ad3a96c648aa" />
+  <Project Path="HBE.Renderer.GL/HBE.Renderer.GL.vcxproj" Id="336972ea-ea83-4eba-91e3-cbc8adc95db7" />
+  <Project Path="HBE.Sandbox/HBE.Sandbox.vcxproj" Id="ba34b4d0-4ebc-4ce9-9efa-db01e592547f">
+    <BuildDependency Project="HBE.Core/HBE.Core.vcxproj" />
+    <BuildDependency Project="HBE.Platform.SDL/HBE.Platform.SDL.vcxproj" />
+    <BuildDependency Project="HBE.Renderer.GL/HBE.Renderer.GL.vcxproj" />
+  </Project>
+</Solution>
