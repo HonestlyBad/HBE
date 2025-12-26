@@ -1,171 +1,214 @@
 # Honestly Bad Engine (HBE)
 
-A lightweight, modular 2D/3D game engine built from scratch in **C++**,
-using **SDL3**, **OpenGL**, and a fully custom architecture. HBE is
-designed to be clean, explicit, and educational---perfect for learning
-real engine‑level development while also building a performant sandbox
-for your own games.
+**Honestly Bad Engine (HBE)** is a lightweight, modular **2D-first game engine**
+built completely from scratch in **C++**, using **SDL3** and **OpenGL**.
 
-------------------------------------------------------------------------
+HBE is intentionally explicit and educational — the goal is not to hide systems
+behind magic, but to expose *real engine architecture* in a clean, readable way.
+It serves both as a learning project and as a solid foundation for small-to-medium
+games.
 
-## 🚀 Features (So Far)
+---
 
-### 🖥 Platform Layer (HBE.Platform)
+## 🚀 Current Features
 
--   SDL3 window creation & management\
--   GL context setup\
--   Input system (keyboard, mouse, scancodes)\
--   Time utilities & delta‑time\
--   Platform abstraction for cross‑compatibility
+### 🧠 Core Systems (`HBE.Core`)
+- Application runtime & main loop
+- Layer & LayerStack system (game states, overlays, UI layers)
+- Logging system (Trace → Fatal)
+- High-resolution timing & delta time
+- Centralized ownership of platform, renderer, and resources
 
-### 🎨 Renderer (HBE.Renderer)
+### 🖥 Platform Layer (`HBE.Platform.SDL`)
+- SDL3 window creation & lifecycle
+- OpenGL context creation
+- Windowed / borderless fullscreen switching
+- VSync control
+- Keyboard input system (pressed / released / held)
+- Event pumping & platform abstraction
 
--   OpenGL‑based rendering pipeline\
--   Texture2D loading & caching\
--   Mesh & RenderItem batching\
--   Camera2D\
--   Sprite Renderer (2D)\
--   Animation system (sprite sheet frame selection with timing)\
--   Basic shader system (GLShader)\
--   Resource cache for textures/materials
+### 🎨 Renderer (`HBE.Renderer` / `HBE.Renderer.GL`)
+- OpenGL 3.3 Core rendering backend
+- Renderer2D abstraction
+- Camera2D with logical resolution support
+- Mesh system (Pos+Color, Pos+UV)
+- Texture2D loading (stb_image)
+- Material system (shader + texture + color)
+- Sprite rendering with UV rects
+- Sprite sheet animation system
+- Resource cache (shaders, meshes, textures)
 
-### 🧩 Core Systems (HBE.Core)
+### 🧩 Scene & Gameplay
+- Scene2D entity container
+- RenderItem + Transform2D model
+- SpriteAnimator with named clips
+- Camera follow
+- Sandbox game layer example
 
--   Logging system (Trace → Error)\
--   Time management\
--   Utility helpers\
--   Math structures for transforms
-
-------------------------------------------------------------------------
+---
 
 ## 📂 Project Structure
 
-    HBE/
-     ├── Core/
-     │    ├── Log.h / .cpp
-     │    ├── Time.h / .cpp
-     │    └── ...
-     ├── Platform/
-     │    ├── SDLPlatform.h / .cpp
-     │    ├── Input.h / .cpp
-     │    └── ...
-     ├── Renderer/
-     │    ├── GLRenderer.h / .cpp
-     │    ├── Renderer2D.h / .cpp
-     │    ├── Mesh.h / .cpp
-     │    ├── Texture2D.h / .cpp
-     │    ├── Material.h / .cpp
-     │    ├── ResourceCache.h / .cpp
-     │    └── ...
-     ├── Sandbox/
-     │    └── main.cpp
-     └── CMakeLists.txt
+```
+HBE/
+├── HBE.Core/
+│   ├── include/HBE/Core/
+│   └── src/
+├── HBE.Platform.SDL/
+│   ├── include/HBE/Platform/
+│   └── src/
+├── HBE.Renderer/
+│   ├── include/HBE/Renderer/
+│   └── src/
+├── HBE.Renderer.GL/
+│   ├── include/HBE/Renderer/
+│   └── src/
+├── Sandbox/
+│   ├── GameLayer.h / .cpp
+│   └── main.cpp
+└── CMakeLists.txt
+```
 
-------------------------------------------------------------------------
+All engine headers are included via:
 
-## 🧠 Vision for the Engine
+```cpp
+#include "HBE/..."
+```
 
-The long‑term direction for HBE includes:
+Each module exports its own `include/` directory.
 
-### ✔ 2D Engine Goals
+---
 
--   Physics lite system\
--   Tilemap support\
--   UI system\
--   Audio wrapper
+## 🧠 Engine Architecture
 
-### ✔ 3D Future Goals
+### Application + Layer Stack
 
--   Basic GL mesh loading (OBJ first)\
--   Camera3D & transforms\
--   Lighting & shading basics
+- `Application` owns:
+  - SDLPlatform
+  - GLRenderer
+  - Renderer2D
+  - ResourceCache
+  - LayerStack
 
-------------------------------------------------------------------------
+- Layers represent:
+  - Game states (GameLayer, MenuLayer, PauseLayer)
+  - Overlays (UI, Debug tools)
 
-## 🛠 Build Instructions
+The main loop lives **entirely inside `Application`**.
 
-### 1️⃣ Requirements
+`main.cpp` is intentionally minimal.
 
--   **CMake 3.20+**
--   **Visual Studio 2022/2025** or Clang/GCC\
--   **SDL3**, **SDL3_image**, **SDL3_ttf**
--   **GLAD** or equivalent OpenGL loader
-
-### 2️⃣ Configure Project
-
-    mkdir build
-    cd build
-    cmake ..
-
-### 3️⃣ Build
-
-    cmake --build .
-
-------------------------------------------------------------------------
+---
 
 ## 🧪 Sandbox Example
 
-Your `main.cpp` typically initializes:
+```cpp
+Application app;
+app.initialize(windowCfg);
 
-``` cpp
-SDLPlatform platform;
-platform.initialize(windowCfg);
-
-GLRenderer renderer;
-Renderer2D::Init();
-
-Scene2D scene;
-Camera2D camera;
-
-while (!platform.pollQuitRequested()) {
-    float dt = Time::deltaTime();
-    scene.update(dt);
-    renderer.render(scene, camera);
-    platform.swapBuffers();
-}
+app.pushLayer(std::make_unique<GameLayer>());
+app.run();
 ```
 
-------------------------------------------------------------------------
+Each layer implements:
 
-## 🎬 Sprite Rendering + Animation
+```cpp
+void onAttach(Application&);
+void onUpdate(float dt);
+void onRender();
+```
 
-``` cpp
+---
+
+## 🎬 Sprite Sheets & Animation
+
+```cpp
+SpriteSheetDesc desc;
+desc.frameWidth  = 100;
+desc.frameHeight = 100;
+
 auto sheet = SpriteRenderer2D::declareSpriteSheet(
-    "assets/player.png",
-    frameWidth,
-    frameHeight,
-    imageW,
-    imageH
+    resources,
+    "orc_sheet",
+    "assets/Orc.png",
+    desc
 );
 
-Animation idle(sheet, 0, 3, 0, 0.12f);
-Animation walk(sheet, 0, 5, 1, 0.08f);
+SpriteAnimationDesc idle;
+idle.name = "Idle";
+idle.row = 0;
+idle.startCol = 0;
+idle.frameCount = 6;
+idle.frameDuration = 0.15f;
+idle.loop = true;
+
+Animator animator;
+animator.sheet = &sheet;
+animator.addClip(idle);
+animator.play("Idle");
 ```
 
-Just call `animation.update(dt)` every frame and draw the correct source
-rect.
+Call `update(dt)` and `apply(renderItem)` each frame.
 
-------------------------------------------------------------------------
+---
+
+## 🛠 Build Instructions
+
+### Requirements
+- CMake **3.20+**
+- Visual Studio **2022 / 2025** (MSVC) or Clang/GCC
+- SDL3
+- OpenGL 3.3+
+- GLAD
+- stb_image
+
+### Build
+```bash
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+---
+
+## 🗺 Roadmap
+
+### 2D Focus
+- Letterboxed logical viewport
+- Sprite flipping & facing
+- Tilemaps
+- Physics-lite (AABB)
+- UI / debug overlay
+- Audio wrapper
+
+### Future 3D
+- Camera3D
+- OBJ mesh loading
+- Basic lighting & materials
+- Transform hierarchy
+
+---
 
 ## 🤝 Contributing
 
-Planned contribution categories:
+Planned contribution areas:
+- Renderer improvements
+- Animation & tooling
+- Scene & entity systems
+- Documentation & examples
 
--   Renderer improvements\
--   Animation system expansion\
--   ECS refactor (future)\
--   Documentation & examples\
--   Platform backends (Win32, Linux, etc.)
+This project favors **clarity over cleverness**.
 
-------------------------------------------------------------------------
+---
 
 ## 📝 License
 
-MIT License --- free to use, modify, break, and rebuild.
+MIT License — free to use, modify, break, and rebuild.
 
-------------------------------------------------------------------------
+---
 
-## ⭐ Support the Project
+## ⭐ Support
 
-If you like the engine or want more features, star the repo on GitHub
-and share feedback!
+If you enjoy the project, consider starring the repository and following
+development. Feedback and discussion are always welcome.
