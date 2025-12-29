@@ -9,6 +9,8 @@ namespace HBE::Core {
 
 	class Application;
 
+	class Event;
+
 	class LayerStack {
 	public:
 		LayerStack() = default;
@@ -21,6 +23,8 @@ namespace HBE::Core {
 		void popOverlay(Layer* overlay);
 
 		void clear();
+
+		void dispatchEvent(Event& e);
 
 		// iteration
 		auto begin() { return m_layers.begin(); }

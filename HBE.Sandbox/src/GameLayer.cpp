@@ -2,6 +2,7 @@
 
 #include "HBE/Core/Application.h"
 #include "HBE/Core/Log.h"
+#include "HBE/Core/Event.h"
 
 #include "HBE/Platform/Input.h"
 
@@ -206,4 +207,20 @@ void GameLayer::onRender() {
     r2d.beginScene(m_camera);
     m_scene.render(r2d);
     r2d.endScene();
+}
+
+bool GameLayer::onEvent(HBE::Core::Event& e) {
+    using namespace HBE::Core;
+
+    if (e.type() == EventType::WindowResize) {
+        auto& re = static_cast<WindowResizeEvent&>(e);
+
+        /// For now: keep logical camera constant (1280x720).
+        // Later: we can use re.vpW/re.vpH if you want camera to match viewport.
+        // camera.viewportWidth = LOGICAL_WIDTH;
+        // camera.viewportHeight = LOGICAL_HEIGHT;
+
+        return false; // not handled
+    }
+    return false;
 }

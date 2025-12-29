@@ -209,6 +209,22 @@ namespace HBE::Platform {
         return false;
     }
 
+    bool SDLPlatform::pumpEvents(const std::function<void(const SDL_Event&)>& onEvent) {
+        if (!m_initialized) return true;
+
+        SDL_Event e;
+        bool quit = false;
+
+        while (SDL_PollEvent(&e)) {
+            if (onEvent) onEvent(e);
+
+            if (e.type == SDL_EVENT_QUIT) {
+                quit = true;
+            }
+        }
+        return quit;
+    }
+
     void SDLPlatform::shutdown() {
         if (!m_initialized) {
             return;

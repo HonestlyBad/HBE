@@ -15,6 +15,8 @@ public:
 	void onUpdate(float dt) override;
 	void onRender() override;
 
+	bool onEvent(HBE::Core::Event& e);
+
 private:
 	HBE::Core::Application* m_app = nullptr;
 

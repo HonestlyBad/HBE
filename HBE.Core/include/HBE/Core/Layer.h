@@ -3,6 +3,7 @@
 namespace HBE::Core {
 
 	class Application;
+	class Event;
 
 	class Layer {
 	public:
@@ -13,5 +14,7 @@ namespace HBE::Core {
 
 		virtual void onUpdate(float dt) {}
 		virtual void onRender() {}
+
+		virtual bool onEvent(Event& e) { (void)e; return false; }
 	};
 }

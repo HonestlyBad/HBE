@@ -37,8 +37,18 @@ namespace HBE::Renderer {
         // Generic draw for 2D items (quad, sprites, etc.).
         void draw(const RenderItem& item);
 
-        // NEW: update GL viewport when the window size changes
+        // update GL viewport when the window size changes
         void resizeViewport(int width, int height);
+
+        // set viewport rectangle explicity (for letterboxing)
+        void setViewportRect(int x, int y, int width, int height);
+
+        // clear the whole backbuffer (not just the letterboxed viewport)
+        void beginFrameFullWindow(int windowW, int windowH);
+
+        // begin rendering inside the letterboxed viewport rect
+        void beginFrameInViewport(int vpX, int vpY, int vpW, int vpH);
+
 
     private:
         bool m_initialized = false;

@@ -212,4 +212,40 @@ namespace HBE::Renderer {
         glBindVertexArray(0);
     }
 
+    void GLRenderer::setViewportRect(int x, int y, int width, int height) {
+        if (!m_initialized) return;
+        if (width <= 0 || height <= 0) return;
+        glViewport(x, y, width, height);
+    }
+
+    void GLRenderer::beginFrameFullWindow(int windowW, int windowH) {
+        if (!m_initialized) return;
+        if (windowW <= 0 || windowH <= 0) return;
+
+        // Clear entire window to black for letterbox bars
+        glViewport(0, 0, windowW, windowH);
+        glClearColor(0.f, 0.f, 0.f, 1.f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
+
+    void GLRenderer::beginFrameInViewport(int vpX, int vpY, int vpW, int vpH) {
+        if (!m_initialized) return;
+        if (vpW <= 0 || vpH <= 0) return;
+
+        glEnable(GL_SCISSOR_TEST);
+        glViewport(vpX, vpY, vpW, vpH);
+        glScissor(vpX, vpY, vpW, vpH);
+
+        glClearColor(
+            m_clearColor[0],
+            m_clearColor[1],
+            m_clearColor[2],
+            m_clearColor[3]
+        );
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glDisable(GL_SCISSOR_TEST);
+    }
+
+
 } // namespace HBE::Renderer

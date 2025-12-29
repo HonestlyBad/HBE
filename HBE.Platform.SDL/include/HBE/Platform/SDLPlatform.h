@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include <functional>
 #include <SDL3/SDL.h>
 
 namespace HBE::Platform {
@@ -40,6 +41,9 @@ namespace HBE::Platform {
 
         // pump events, return true if user asked to quit.
         bool pollQuitRequested();
+
+        // returns true if user requested quit
+        bool pumpEvents(const std::function<void(const SDL_Event&)>& onEvent);
 
         // simple delay helper
         void delayMillis(std::uint32_t ms);

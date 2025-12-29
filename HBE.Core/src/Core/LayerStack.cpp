@@ -1,5 +1,6 @@
 #include "HBE/Core/LayerStack.h"
 #include "HBE/Core/Application.h"
+#include "HBE/Core/Event.h"
 
 namespace HBE::Core {
 
@@ -50,5 +51,18 @@ namespace HBE::Core {
 		}
 		m_layers.clear();
 		m_insertIndex = 0;
+	}
+
+	void LayerStack::dispatchEvent(Event& e) {
+		// overlays should get first shot so iterate reverse
+		for (auto it = m_layers.rbegin(); it != m_layers.rend(); ++it) {
+			if (!(*it)) continue;
+
+			if ((*it)->onEvent(e)) {
+				e.handled = true;
+			}
+
+			if (e.handled) break;
+		}
 	}
 }
