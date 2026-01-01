@@ -24,14 +24,21 @@ using namespace HBE::Platform;
 
 namespace {
 	constexpr float SPRITE_PIXEL_SCALE = 4.0f;
+    // --- COLLIDER SIZE IN PIXELS (tweak these) ---
+// This is NOT the frame size (100x100). This is the goblin's "body" size.
+    constexpr float PLAYER_BODY_W_PX = 8.0f;
+    constexpr float PLAYER_BODY_H_PX = 14.0f;
+
+    // Optional: shift collider down so feet sit on ground nicer
+    constexpr float PLAYER_BODY_Y_OFFSET_PX = +0.5f;
 }
 
 void GameLayer::onAttach(Application& app) {
 	m_app = &app;
 
 	// camera setup (logical resolution)
-	m_camera.x = 0.0f;
-	m_camera.y = 0.0f;
+    m_camera.x = std::round(m_camera.x);
+    m_camera.y = std::round(m_camera.y);
 	m_camera.zoom = 1.0f;
 	m_camera.viewportWidth = LOGICAL_WIDTH;
 	m_camera.viewportHeight = LOGICAL_HEIGHT;
@@ -40,6 +47,40 @@ void GameLayer::onAttach(Application& app) {
 	app.gl().setClearColor(0.1f, 0.2f, 0.35f, 1.0f);
 
 	buildSpritePipeline();
+
+    // load Tilemap
+    std::string err;
+    if (!HBE::Renderer::TileMapLoader::loadFromJsonFile("assets/maps/test_map.json", m_tileMap, &err)) {
+        LogFatal("Failed to load tilemap: " + err);
+        m_app->requestQuit();
+        return;
+    }
+
+    // build tile renderer (uses same sprite shader + quad mesh)
+    if (!m_tileRenderer.build(m_app->renderer2D(), m_app->resources(), m_spriteShader, m_quadMesh, m_tileMap)) {
+        LogFatal("Failed to build TileMapRenderer");
+        m_app->requestQuit();
+        return;
+    }
+
+    // choose collision layer by name
+    m_collisionLayer = m_tileMap.findLayer("Ground");
+    if (!m_collisionLayer) {
+        LogFatal("Tilemap missing collision layer named 'Ground'");
+        m_app->requestQuit();
+        return;
+    }
+
+    // Initialize player box to match goblin size (center-based);
+    if (auto* tr = m_scene.getTransform(m_goblinEntity)) {
+        const float pxScale = SPRITE_PIXEL_SCALE; // or m_tileMap.tilePixelScale if you store it there
+
+        m_playerBox.w = PLAYER_BODY_W_PX * pxScale;
+        m_playerBox.h = PLAYER_BODY_H_PX * pxScale;
+
+        m_playerBox.cx = tr->posX;
+        m_playerBox.cy = tr->posY + (PLAYER_BODY_Y_OFFSET_PX * pxScale);
+    }
 
 	LogInfo("GameLayer attached.");
 }
@@ -99,6 +140,12 @@ void GameLayer::buildSpritePipeline() {
         m_app->requestQuit();
         return;
     }
+    // Debug draw setup (uses the same quad mesh)
+    if (!m_debug.initialize(resources, m_quadMesh)) {
+        LogFatal("GameLayer: DebugDraw2D init failed");
+        m_app->requestQuit();
+        return;
+    }
 
     // Sprite sheet
     SpriteSheetDesc desc{};
@@ -133,24 +180,24 @@ void GameLayer::buildSpritePipeline() {
     // animator
     m_goblinAnimator.sheet = &m_goblinSheet;
 
-    SpriteAnimationDesc idle{};
-    idle.name = "Idle";
-    idle.row = 0;
-    idle.startCol = 0;
-    idle.frameCount = 6;
-    idle.frameDuration = 0.15f;
-    idle.loop = true;
+    SpriteAnimationDesc GoblinIdle{};
+    GoblinIdle.name = "Idle";
+    GoblinIdle.row = 0;
+    GoblinIdle.startCol = 0;
+    GoblinIdle.frameCount = 6;
+    GoblinIdle.frameDuration = 0.15f;
+    GoblinIdle.loop = true;
 
-    SpriteAnimationDesc walk{};
-    walk.name = "Walk";
-    walk.row = 1;
-    walk.startCol = 0;
-    walk.frameCount = 6;
-    walk.frameDuration = 0.10f;
-    walk.loop = true;
+    SpriteAnimationDesc GoblinWalk{};
+    GoblinWalk.name = "Walk";
+    GoblinWalk.row = 1;
+    GoblinWalk.startCol = 0;
+    GoblinWalk.frameCount = 6;
+    GoblinWalk.frameDuration = 0.10f;
+    GoblinWalk.loop = true;
 
-    m_goblinAnimator.addClip(idle);
-    m_goblinAnimator.addClip(walk);
+    m_goblinAnimator.addClip(GoblinIdle);
+    m_goblinAnimator.addClip(GoblinWalk);
     m_goblinAnimator.play("Idle", true);
 }
 
@@ -160,32 +207,47 @@ void GameLayer::onUpdate(float dt) {
 
     }
 
-    bool moveUp = Input::IsKeyDown(SDL_SCANCODE_W) || Input::IsKeyDown(SDL_SCANCODE_UP);
-    bool moveDown = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
-    bool moveLeft = Input::IsKeyDown(SDL_SCANCODE_A) || Input::IsKeyDown(SDL_SCANCODE_LEFT);
-    bool moveRight = Input::IsKeyDown(SDL_SCANCODE_D) || Input::IsKeyDown(SDL_SCANCODE_RIGHT);
 
     Transform2D* tr = m_scene.getTransform(m_goblinEntity);
     if (!tr) return;
 
+    bool Up = Input::IsKeyDown(SDL_SCANCODE_W) || Input::IsKeyDown(SDL_SCANCODE_UP);
+    bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
+    bool Left = Input::IsKeyDown(SDL_SCANCODE_A) || Input::IsKeyDown(SDL_SCANCODE_LEFT);
+    bool Right = Input::IsKeyDown(SDL_SCANCODE_D) || Input::IsKeyDown(SDL_SCANCODE_RIGHT);
+
     float moveX = 0.0f;
     float moveY = 0.0f;
-    if (moveUp) moveY += 1.0f;
-    if (moveDown) moveY -= 1.0f;
-    if (moveLeft) moveX -= 1.0f;
-    if (moveRight) moveX += 1.0f;
+    if (Up) moveY += 1.0f;
+    if (Down) moveY -= 1.0f;
+    if (Left) moveX -= 1.0f;
+    if (Right) moveX += 1.0f;
 
     if (moveX != 0.0f || moveY != 0.0f) {
         float len = std::sqrt(moveX * moveX + moveY * moveY);
         if (len > 0.0f) { moveX /= len; moveY /= len; }
     }
 
-    bool isMoving = (moveX != 0.0f || moveY != 0.0f);
-
     const float speed = 300.0f;
-    tr->posX += moveX * speed * dt;
-    tr->posY += moveY * speed * dt;
+    m_velX = moveX * speed;
+    m_velY = moveY * speed;
 
+    // sync player box center with transform center before moving
+    const float pxScale = SPRITE_PIXEL_SCALE;
+
+    m_playerBox.cx = tr->posX;
+    m_playerBox.cy = tr->posY + (PLAYER_BODY_Y_OFFSET_PX * pxScale);
+
+    // collide against tiles
+    HBE::Renderer::TileCollision::moveAndCollide(m_tileMap, *m_collisionLayer, m_playerBox, m_velX, m_velY, dt);
+
+    // apply resolved position back to entity
+    tr->posX = m_playerBox.cx;
+    tr->posY = m_playerBox.cy - (PLAYER_BODY_Y_OFFSET_PX * pxScale);
+
+
+    // animation logic
+    bool isMoving = (moveX != 0.0f || moveY != 0.0f);
     if (isMoving) m_goblinAnimator.play("Walk");
     else m_goblinAnimator.play("Idle");
 
@@ -205,7 +267,41 @@ void GameLayer::onRender() {
     Renderer2D& r2d = m_app->renderer2D();
 
     r2d.beginScene(m_camera);
+
+    // draw map
+    m_tileRenderer.draw(r2d, m_tileMap);
+
+    // draw sprites/ entites
     m_scene.render(r2d);
+
+    if (m_debugDraw) {
+        using namespace HBE::Renderer;
+
+        // 1) Draw player AABB (based on sprite transform for now)
+        // If you already have a real collision AABB, use that values instead.
+        Transform2D* tr = m_scene.getTransform(m_goblinEntity);
+        if (tr) {
+            // Approx player box: use sprite scale but slightly smaller if you want
+            float boxW = tr->scaleX * 0.60f;
+            float boxH = tr->scaleY * 0.80f;
+
+            Color4 red{ 1,0,0,1 };
+            m_debug.rect(r2d, m_playerBox.cx, m_playerBox.cy, m_playerBox.w, m_playerBox.h, red, false);
+        }
+
+        // 2) OPTIONAL: draw a collision-grid cell size reference (16x16 = current collision code)
+        // This is the BIG one: if your rendered tiles are 64x64 (16*4),
+        // and collision uses 16x16, you’ll see the mismatch instantly.
+        //
+        // Example: draw a 16x16 cell at world origin
+        Color4 yellow{ 1,1,0,1 };
+        m_debug.rect(r2d, 8.0f, 8.0f, 16.0f, 16.0f, yellow, false);
+
+        // If you want, also draw what a "rendered tile size" would be (example 64x64):
+        Color4 green{ 0,1,0,1 };
+        m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, green, false);
+    }
+
     r2d.endScene();
 }
 

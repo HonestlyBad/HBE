@@ -22,3 +22,5 @@ HBE.Sandbox/HBE.Sandbox.vcxproj.user
 /HBE.Sandbox/x64
 settings.VisualStudio.json
 /x64
+/HBE.Sandbox/assets/tiles
+/HBE.Sandbox/assets/maps

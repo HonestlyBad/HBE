@@ -6,6 +6,11 @@
 #include "HBE/Renderer/Scene2D.h"
 #include "HBE/Renderer/Material.h"
 #include "HBE/Renderer/SpriteRenderer2D.h"
+#include "HBE/Renderer/DebugDraw2D.h"
+#include "HBE/Renderer/TileMap.h"
+#include "HBE/Renderer/TileMapRenderer.h"
+#include "HBE/Renderer/TileMapLoader.h"
+#include "HBE/Renderer/TileCollision.h"
 
 namespace HBE::Core { class Application; }
 
@@ -14,8 +19,10 @@ public:
 	void onAttach(HBE::Core::Application& app) override;
 	void onUpdate(float dt) override;
 	void onRender() override;
+	HBE::Renderer::DebugDraw2D m_debug{};
 
 	bool onEvent(HBE::Core::Event& e);
+	bool m_debugDraw = true;
 
 private:
 	HBE::Core::Application* m_app = nullptr;
@@ -27,6 +34,16 @@ private:
 	// renderer side
 	HBE::Renderer::Camera2D m_camera{};
 	HBE::Renderer::Scene2D m_scene{};
+
+	// tilemap
+	HBE::Renderer::TileMap m_tileMap{};
+	HBE::Renderer::TileMapRenderer m_tileRenderer{};
+	const HBE::Renderer::TileMapLayer* m_collisionLayer = nullptr;
+
+	// player collision box (center-based)
+	HBE::Renderer::AABB m_playerBox{};
+	float m_velX = 0.0f;
+	float m_velY = 0.0f;
 
 	// resources
 	HBE::Renderer::GLShader* m_spriteShader = nullptr;
