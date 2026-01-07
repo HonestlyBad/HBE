@@ -18,8 +18,10 @@ namespace HBE::Renderer {
         // Create simple checkerboard procedural texture
         bool createChecker(int width = 128, int height = 128);
 
-        // NEW: load from image file (PNG, JPG, etc.)
+        // load from image file (PNG, JPG, etc.)
         bool loadFromFile(const std::string& path);
+        bool createFromRGBA(int width, int height, const unsigned char* rgbaPixels);
+
 
         void bind() const;
 

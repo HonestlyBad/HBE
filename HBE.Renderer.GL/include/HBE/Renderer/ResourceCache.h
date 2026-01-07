@@ -36,6 +36,11 @@ namespace HBE::Renderer {
         Texture2D* getOrCreateTextureFromFile(const std::string& name,
             const std::string& path);
 
+        Texture2D* getOrCreateTextureFromRGBA(const std::string& name,
+            int width,
+            int height,
+            const unsigned char* rgbaPixels);
+
 
         GLShader* getShader(const std::string& name) const;
         Texture2D* getTexture(const std::string& name) const;

@@ -49,29 +49,30 @@ namespace HBE::Renderer {
         return true;
     }
 
-    void DebugDraw2D::rect(Renderer2D& r2d, float cx, float cy, float w, float h, const Color4& color, bool filled) {
+    void DebugDraw2D::rect(Renderer2D& r2d,
+        float cx, float cy,
+        float w, float h,
+        float r, float g, float b, float a,
+        bool filled)
+    {
         if (!m_quadMesh || !m_shader) return;
 
         RenderItem item{};
         item.mesh = m_quadMesh;
         item.material = &m_mat;
 
-        // centered quad mesh assumption (-0.5..0.5)
         item.transform.posX = cx;
         item.transform.posY = cy;
         item.transform.scaleX = w;
         item.transform.scaleY = h;
         item.transform.rotation = 0.0f;
 
-        // Material::apply will set uColor if it exists
-        m_mat.color = color;
+        m_mat.color = HBE::Renderer::Color4{ r, g, b, a };
 
-        // Outline vs filled
         if (!filled) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
         r2d.draw(item);
-
         if (!filled) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
+
 
 } // namespace HBE::Renderer

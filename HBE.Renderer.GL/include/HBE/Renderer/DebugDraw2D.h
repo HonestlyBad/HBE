@@ -2,6 +2,7 @@
 
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Material.h"
+#include "HBE/Renderer/Color.h"
 
 namespace HBE::Renderer {
 
@@ -10,14 +11,18 @@ namespace HBE::Renderer {
     class Mesh;
     class GLShader;
 
-    struct Color4;
 
     class DebugDraw2D {
     public:
         bool initialize(ResourceCache& cache, Mesh* quadMesh);
 
         // Draw a rectangle centered at (cx, cy)
-        void rect(Renderer2D& r2d, float cx, float cy, float w, float h, const Color4& color, bool filled = false);
+        void rect(Renderer2D& r2d,
+            float cx, float cy,
+            float w, float h,
+            float r, float g, float b, float a,
+            bool filled);
+
 
     private:
         Mesh* m_quadMesh = nullptr;

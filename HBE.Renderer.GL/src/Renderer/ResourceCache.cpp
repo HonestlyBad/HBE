@@ -114,6 +114,28 @@ namespace HBE::Renderer {
 		return raw;
 	}
 
+	Texture2D* ResourceCache::getOrCreateTextureFromRGBA(
+		const std::string& name,
+		int width,
+		int height,
+		const unsigned char* rgbaPixels)
+	{
+		auto it = m_textures.find(name);
+		if (it != m_textures.end()) {
+			return it->second.get();
+		}
+
+		auto tex = std::make_unique<Texture2D>();
+		if (!tex->createFromRGBA(width, height, rgbaPixels)) {
+			LogError("ResourceCache: failed to create RGBA texture '" + name + "'");
+			return nullptr;
+		}
+
+		Texture2D* raw = tex.get();
+		m_textures.emplace(name, std::move(tex));
+		return raw;
+	}
+
 
 	Mesh* ResourceCache::getMesh(const std::string& name) const {
 		auto it = m_meshes.find(name);

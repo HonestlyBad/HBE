@@ -11,6 +11,7 @@
 #include "HBE/Renderer/TileMapRenderer.h"
 #include "HBE/Renderer/TileMapLoader.h"
 #include "HBE/Renderer/TileCollision.h"
+#include "HBE/Renderer/TextRenderer2D.h"
 
 namespace HBE::Core { class Application; }
 
@@ -20,6 +21,15 @@ public:
 	void onUpdate(float dt) override;
 	void onRender() override;
 	HBE::Renderer::DebugDraw2D m_debug{};
+	HBE::Renderer::TextRenderer2D m_text{};
+
+	// --- stats (FPS/UPS) ---
+	double m_statTimer = 0.0;  // seconds accumulated
+	int    m_frameCount = 0;   // frames rendered in window
+	int    m_updateCount = 0;  // updates in window
+	float  m_fps = 0.0f;
+	float  m_ups = 0.0f;
+
 
 	bool onEvent(HBE::Core::Event& e);
 	bool m_debugDraw = true;

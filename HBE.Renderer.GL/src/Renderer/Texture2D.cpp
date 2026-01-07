@@ -71,6 +71,37 @@ namespace HBE::Renderer {
         return true;
     }
 
+    bool Texture2D::createFromRGBA(int width, int height, const unsigned char* rgbaPixels) {
+        destroy();
+
+        m_width = width;
+        m_height = height;
+
+        glGenTextures(1, &m_id);
+        glBindTexture(GL_TEXTURE_2D, m_id);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA8,
+            width,
+            height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            rgbaPixels
+        );
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return true;
+    }
+
+
     bool Texture2D::loadFromFile(const std::string& path) {
         destroy();
 

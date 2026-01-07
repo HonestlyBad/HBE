@@ -147,6 +147,12 @@ void GameLayer::buildSpritePipeline() {
         return;
     }
 
+    if (!m_text.initialize(m_app->resources(), m_spriteShader, m_quadMesh)) {
+        LogFatal("GameLayer: TextRenderer2D init failed");
+        m_app->requestQuit();
+        return;
+    }
+
     // Sprite sheet
     SpriteSheetDesc desc{};
     desc.frameWidth = 100;
@@ -207,6 +213,21 @@ void GameLayer::onUpdate(float dt) {
 
     }
 
+    // ---- stats ----
+    m_statTimer += (double)dt;
+    m_updateCount++;
+
+    if (m_statTimer >= 0.5) { // update twice per second
+        const double window = m_statTimer;
+
+        m_fps = (float)((double)m_frameCount / window);
+        m_ups = (float)((double)m_updateCount / window);
+
+        m_frameCount = 0;
+        m_updateCount = 0;
+        m_statTimer = 0.0;
+    }
+
 
     Transform2D* tr = m_scene.getTransform(m_goblinEntity);
     if (!tr) return;
@@ -263,6 +284,7 @@ void GameLayer::onUpdate(float dt) {
 }
 
 void GameLayer::onRender() {
+    m_frameCount++;
     // for now, layer is responsible for rendering its own scene
     Renderer2D& r2d = m_app->renderer2D();
 
@@ -275,7 +297,6 @@ void GameLayer::onRender() {
     m_scene.render(r2d);
 
     if (m_debugDraw) {
-        using namespace HBE::Renderer;
 
         // 1) Draw player AABB (based on sprite transform for now)
         // If you already have a real collision AABB, use that values instead.
@@ -285,8 +306,9 @@ void GameLayer::onRender() {
             float boxW = tr->scaleX * 0.60f;
             float boxH = tr->scaleY * 0.80f;
 
-            Color4 red{ 1,0,0,1 };
-            m_debug.rect(r2d, m_playerBox.cx, m_playerBox.cy, m_playerBox.w, m_playerBox.h, red, false);
+            m_debug.rect(r2d, m_playerBox.cx, m_playerBox.cy,
+                m_playerBox.w, m_playerBox.h,
+                1, 0, 0, 1, false); // red
         }
 
         // 2) OPTIONAL: draw a collision-grid cell size reference (16x16 = current collision code)
@@ -294,13 +316,33 @@ void GameLayer::onRender() {
         // and collision uses 16x16, you’ll see the mismatch instantly.
         //
         // Example: draw a 16x16 cell at world origin
-        Color4 yellow{ 1,1,0,1 };
-        m_debug.rect(r2d, 8.0f, 8.0f, 16.0f, 16.0f, yellow, false);
+        m_debug.rect(r2d, 8.0f, 8.0f, 16.0f, 16.0f, 1, 1, 0, 1, false);
 
         // If you want, also draw what a "rendered tile size" would be (example 64x64):
-        Color4 green{ 0,1,0,1 };
-        m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, green, false);
+        m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, 0, 1, 0, 1, false); // green
     }
+
+    if (m_debugDraw) {
+        // UI camera: screen-space
+        HBE::Renderer::Camera2D uiCam{};
+        uiCam.x = LOGICAL_WIDTH * 0.5f;
+        uiCam.y = LOGICAL_HEIGHT * 0.5f;
+        uiCam.zoom = 1.0f;
+        uiCam.viewportWidth = LOGICAL_WIDTH;
+        uiCam.viewportHeight = LOGICAL_HEIGHT;
+
+        // Draw overlay with UI camera
+        r2d.endScene();          // finish world
+        r2d.beginScene(uiCam);   // begin UI
+
+        // top-left: (10, LOGICAL_HEIGHT - 20)
+        std::string s = "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups);
+        m_text.drawText(r2d, 10.0f, LOGICAL_HEIGHT - 26.0f, s, 2.0f);
+
+        r2d.endScene();
+        return;
+    }
+
 
     r2d.endScene();
 }
