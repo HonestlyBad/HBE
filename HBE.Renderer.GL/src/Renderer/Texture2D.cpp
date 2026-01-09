@@ -153,4 +153,15 @@ namespace HBE::Renderer {
         glBindTexture(GL_TEXTURE_2D, m_id);
     }
 
+    void Texture2D::setFiltering(bool linear) {
+        if (m_id == 0) return;
+
+        glBindTexture(GL_TEXTURE_2D, m_id);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
 } // namespace HBE::Renderer

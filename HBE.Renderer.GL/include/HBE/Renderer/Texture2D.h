@@ -25,6 +25,9 @@ namespace HBE::Renderer {
 
         void bind() const;
 
+        // Sets texture filtering. Linear looks better for TTF fonts; nearest is good for pixel art.
+        void setFiltering(bool linear);
+
         unsigned int getID() const { return m_id; }
 
     private:

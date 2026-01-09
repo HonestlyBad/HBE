@@ -1,36 +1,57 @@
 #pragma once
 #include <string>
+#include <unordered_map>
+
 #include "HBE/Renderer/Material.h"
 #include "HBE/Renderer/Color.h"
+#include "HBE/Renderer/Font.h"
 
 namespace HBE::Renderer {
 
-	class Renderer2D;
-	class ResourceCache;
-	class Mesh;
-	class GLShader;
-	class Texture2D;
+    class Renderer2D;
+    class ResourceCache;
+    class Mesh;
+    class GLShader;
+    class Texture2D;
 
-	class TextRenderer2D {
-	public:
-		bool initialize(ResourceCache& cache, GLShader* spriteShader, Mesh* quadMesh);
+    class TextRenderer2D {
+    public:
+        bool initialize(ResourceCache& cache, GLShader* spriteShader, Mesh* quadMesh);
 
-		// x, y are screen-space pixles (origin bottom-left)
-		void drawText(Renderer2D& r2d, float x, float y, const std::string& text, float pixelScale = 2.0f, Color4 tint = { 1,1,1,1 });
+        // Load a custom TTF/OTF and store it by name
+        bool loadFont(ResourceCache& cache,
+            const std::string& fontName,
+            const std::string& ttfPath,
+            float pixelHeight,
+            int atlasW = 512,
+            int atlasH = 512);
 
-		int glyphW() const { return m_glyphW; }
-		int glyphH() const { return m_glyphH; }
+        void setActiveFont(const std::string& fontName);
 
-	private:
-		Texture2D* m_fontTex = nullptr;
-		Material m_mat{};
-		Mesh* m_quad = nullptr;
+        // x,y are screen-space pixels (origin bottom-left).
+        // y is treated as the BASELINE for proportional fonts.
+        void drawText(Renderer2D& r2d,
+            float x, float y,
+            const std::string& text,
+            float scale = 1.0f,
+            Color4 tint = { 1,1,1,1 });
 
-		int m_texW = 0, m_texH = 0;
-		int m_glyphW = 8, m_glyphH = 8;
-		int m_cols = 16;
+    private:
+        // Fallback debug atlas font (your original)
+        Texture2D* m_debugFontTex = nullptr;
+        int m_dbgTexW = 0, m_dbgTexH = 0;
+        int m_dbgGlyphW = 8, m_dbgGlyphH = 8;
+        int m_dbgCols = 16;
 
-		void uvForChar(unsigned char c, float outUV[4]) const;
-		bool buildDebugAtlas(ResourceCache& cache);
-	};
-}
+        bool buildDebugAtlas(ResourceCache& cache);
+        void dbgUvForChar(unsigned char c, float outUVRect[4]) const;
+
+        // Real fonts
+        std::unordered_map<std::string, Font> m_fonts;
+        Font* m_activeFont = nullptr;
+
+        Material m_mat{};
+        Mesh* m_quad = nullptr;
+    };
+
+} // namespace HBE::Renderer

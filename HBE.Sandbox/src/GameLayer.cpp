@@ -105,15 +105,18 @@ void GameLayer::buildSpritePipeline() {
     )";
 
     const char* spriteFs = R"(#version 330 core
-        in vec2 vUV;
-        out vec4 FragColor;
+    in vec2 vUV;
+    out vec4 FragColor;
 
-        uniform sampler2D uTex;
+    uniform sampler2D uTex;
+    uniform vec4 uColor;
 
-        void main() {
-            FragColor = texture(uTex, vUV);
-        }
-    )";
+    void main() {
+        vec4 tex = texture(uTex, vUV);
+        FragColor = tex * uColor;
+    }
+)";
+
 
     m_spriteShader = resources.getOrCreateShader("sprite", spriteVs, spriteFs);
     if (!m_spriteShader) {
@@ -152,6 +155,14 @@ void GameLayer::buildSpritePipeline() {
         m_app->requestQuit();
         return;
     }
+    // Example font load (put a .ttf in your sandbox assets folder)
+    if (!m_text.loadFont(m_app->resources(), "ui", "assets/fonts/BoldPixels.ttf", 16.0f)) {
+        LogError("FAILED to load font: assets/fonts/BoldPixels.ttf");
+    }
+    else {
+        m_text.setActiveFont("ui");
+    }
+
 
     // Sprite sheet
     SpriteSheetDesc desc{};
@@ -335,9 +346,17 @@ void GameLayer::onRender() {
         r2d.endScene();          // finish world
         r2d.beginScene(uiCam);   // begin UI
 
+        float fontSize = 32.0f;
+        float lineSpacing = fontSize * 1.25f; // tweak this freely
+        float x = 20.0f;
+        float y = 680.0f;
+
         // top-left: (10, LOGICAL_HEIGHT - 20)
         std::string s = "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups);
-        m_text.drawText(r2d, 10.0f, LOGICAL_HEIGHT - 26.0f, s, 2.0f);
+        m_text.drawText(r2d, x, y, "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups), 1.0f, HBE::Renderer::Color4{ 1,1,1,1 });
+        y -= lineSpacing;
+        m_text.drawText(r2d, x, y, "HELLO CUSTOM FONT", 1.0f, HBE::Renderer::Color4{ 0.9f,0.8f,0.2f,1 });
+        //m_text.drawText(r2d, 10.0f, LOGICAL_HEIGHT - 26.0f, s, 2.0f);
 
         r2d.endScene();
         return;
