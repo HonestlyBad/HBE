@@ -30,6 +30,7 @@ public:
 	float  m_fps = 0.0f;
 	float  m_ups = 0.0f;
 
+	float m_uiAnimT = 0.0f;
 
 	bool onEvent(HBE::Core::Event& e);
 	bool m_debugDraw = true;

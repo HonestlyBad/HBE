@@ -26,6 +26,48 @@ namespace HBE::Renderer {
             int lineCount = 1;
         };
 
+        struct TextAnim {
+            // Time
+            float t = 0.0f;          // current time (seconds)
+            float duration = 1.0f;   // total duration for fade/out (optional)
+
+            // Typewriter
+            bool typewriter = false;
+            float charsPerSecond = 30.0f; // revealed glyphs per second
+            int maxChars = -1;            // clamp reveal (optional)
+
+            // Fade
+            bool fadeIn = false;
+            float fadeInTime = 0.25f;     // seconds
+            bool fadeOut = false;
+            float fadeOutTime = 0.25f;    // seconds (at end of duration)
+
+            // Motion (screen/world units)
+            float offsetX = 0.0f;
+            float offsetY = 0.0f;
+            float velX = 0.0f;        // units/sec
+            float velY = 0.0f;        // units/sec
+
+            // Scale pop (optional)
+            float startScale = 1.0f;
+            float endScale = 1.0f;
+
+            // If true, animation ends after duration (useful for damage numbers)
+            bool autoExpire = false;
+        };
+
+        void drawTextAnimated(Renderer2D& r2d,
+            float x, float y,
+            const std::string& text,
+            float baseScale,
+            Color4 baseTint,
+            TextAlignH alignH,
+            TextAlignV alignV,
+            float maxWidth,
+            float lineSpacingMult,
+            const TextAnim& anim);
+
+
         // Measure without drawing.
         // if maxWidth > 0, it wraps.
         TextLayout measureText(const std::string& text, float scale = 1.0f, float maxWidth = 0.0f) const;

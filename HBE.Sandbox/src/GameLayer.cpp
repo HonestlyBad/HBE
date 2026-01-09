@@ -225,6 +225,7 @@ void GameLayer::onUpdate(float dt) {
     }
 
     // ---- stats ----
+    m_uiAnimT += dt;
     m_statTimer += (double)dt;
     m_updateCount++;
 
@@ -304,6 +305,35 @@ void GameLayer::onRender() {
     // draw map
     m_tileRenderer.draw(r2d, m_tileMap);
 
+    // --- DAMAGE TEXT (WORLD SPACE) ---
+    HBE::Renderer::TextRenderer2D::TextAnim dmg{};
+    dmg.t = std::fmod(m_uiAnimT, 1.0f);
+    dmg.duration = 1.0f;
+    dmg.autoExpire = true;
+    dmg.fadeIn = true;
+    dmg.fadeInTime = 0.05f;
+    dmg.fadeOut = true;
+    dmg.fadeOutTime = 0.35f;
+    dmg.velY = 40.0f;          // world units/sec
+    dmg.startScale = 1.2f;
+    dmg.endScale = 1.0f;
+
+    // IMPORTANT: use PLAYER POSITION, not camera position
+    Transform2D* tr = m_scene.getTransform(m_goblinEntity);
+    if (tr) {
+        m_text.drawTextAnimated(r2d,
+            tr->posX, tr->posY + 80.0f,   // above player
+            "-25",
+            1.0f,
+            { 1,0.2f,0.2f,1 },
+            TextRenderer2D::TextAlignH::Center,
+            TextRenderer2D::TextAlignV::Baseline,
+            0.0f,
+            1.0f,
+            dmg);
+    }
+
+
     // draw sprites/ entites
     m_scene.render(r2d);
 
@@ -357,27 +387,31 @@ void GameLayer::onRender() {
         //m_text.drawTextAligned(r2d, x, y, s, 1.0f, HBE::Renderer::Color4{ 1,1,1,1 }, TextRenderer2D::TextAlignH::Left, TextRenderer2D::TextAlignV::Middle, 600.0f);
         
         //m_text.drawText(r2d, 10.0f, LOGICAL_HEIGHT - 26.0f, s, 2.0f);
-        m_text.drawTextAligned(r2d,
+        //m_text.drawTextAligned(r2d, 20.0f, 680.0f, "This is a long sentence that should wrap nicely within a box.", 1.0f, { 1,1,1,1 }, TextRenderer2D::TextAlignH::Left, TextRenderer2D::TextAlignV::Baseline, 400.0f);
+        //m_text.drawTextAligned(r2d, LOGICAL_WIDTH * 0.5f, LOGICAL_HEIGHT * 0.5f, "Centered text\nwith two lines", 1.0f, { 1,1,0,1 }, TextRenderer2D::TextAlignH::Center, TextRenderer2D::TextAlignV::Middle, 600.0f);
+
+        HBE::Renderer::TextRenderer2D::TextAnim a{};
+        a.t = m_uiAnimT;
+        a.typewriter = true;
+        a.charsPerSecond = 25.0f;
+        a.fadeIn = true;
+        a.fadeInTime = 0.25f;
+
+        m_text.drawTextAnimated(r2d,
             20.0f, 680.0f,
-            "This is a long sentence that should wrap nicely within a box.",
+            "This is animated typewriter text that wraps nicely within a box.",
             1.0f,
             { 1,1,1,1 },
-            TextRenderer2D::TextAlignH::Left,
-            TextRenderer2D::TextAlignV::Baseline,
-            400.0f);
-        m_text.drawTextAligned(r2d,
-            LOGICAL_WIDTH * 0.5f, LOGICAL_HEIGHT * 0.5f,
-            "Centered text\nwith two lines",
-            1.0f,
-            { 1,1,0,1 },
-            TextRenderer2D::TextAlignH::Center,
-            TextRenderer2D::TextAlignV::Middle,
-            600.0f);
-
+            HBE::Renderer::TextRenderer2D::TextAlignH::Left,
+            HBE::Renderer::TextRenderer2D::TextAlignV::Baseline,
+            420.0f,
+            1.25f,
+            a);
 
         r2d.endScene();
         return;
     }
+
 
 
     r2d.endScene();

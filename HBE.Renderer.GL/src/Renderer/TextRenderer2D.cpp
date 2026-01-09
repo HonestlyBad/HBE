@@ -17,6 +17,40 @@ namespace HBE::Renderer {
         return c == ' ' || c == '\t';
     }
 
+    static float clamp01(float v) {
+        if (v < 0.0f) return 0.0f;
+        if (v > 1.0f) return 1.0f;
+        return v;
+    }
+
+    // Count “glyphs” in a string (ASCII-safe; ignores '\n' by default)
+    static int countGlyphsASCII(const std::string& s, bool includeNewlines) {
+        int n = 0;
+        for (char c : s) {
+            if (!includeNewlines && c == '\n') continue;
+            n++;
+        }
+        return n;
+    }
+
+    // Return first N glyphs of string (ASCII-safe), preserving newlines if they appear
+    static std::string takeFirstGlyphsASCII(const std::string& s, int glyphCount) {
+        if (glyphCount < 0) return s;
+        std::string out;
+        out.reserve((size_t)glyphCount);
+
+        int n = 0;
+        for (char c : s) {
+            if (n >= glyphCount) break;
+            out.push_back(c);
+            // count everything except maybe you want to ignore '\n' for reveal;
+            // for now, count it so lines reveal naturally.
+            n++;
+        }
+        return out;
+    }
+
+
     static void putPixel(std::vector<unsigned char>& rgba, int w, int x, int y, unsigned char a) {
         int i = (y * w + x) * 4;
         rgba[i + 0] = 255;
@@ -291,6 +325,65 @@ namespace HBE::Renderer {
         return out;
     }
 
+    void TextRenderer2D::drawTextAnimated(Renderer2D& r2d,
+        float x, float y,
+        const std::string& text,
+        float baseScale,
+        Color4 baseTint,
+        TextAlignH alignH,
+        TextAlignV alignV,
+        float maxWidth,
+        float lineSpacingMult,
+        const TextAnim& anim)
+    {
+        // 1) Compute animated alpha
+        float alpha = 1.0f;
+
+        if (anim.fadeIn && anim.fadeInTime > 0.0f) {
+            alpha *= clamp01(anim.t / anim.fadeInTime);
+        }
+
+        if (anim.fadeOut && anim.autoExpire && anim.duration > 0.0f && anim.fadeOutTime > 0.0f) {
+            float outStart = anim.duration - anim.fadeOutTime;
+            if (anim.t >= outStart) {
+                float u = (anim.t - outStart) / anim.fadeOutTime;
+                alpha *= (1.0f - clamp01(u));
+            }
+        }
+
+        Color4 tint = baseTint;
+        tint.a *= alpha;
+
+        // 2) Compute animated scale (linear; can add easing later)
+        float scale = baseScale;
+        if (anim.startScale != anim.endScale && anim.duration > 0.0f) {
+            float u = clamp01(anim.t / anim.duration);
+            scale = baseScale * (anim.startScale + (anim.endScale - anim.startScale) * u);
+        }
+
+        // 3) Compute animated position offset
+        float ax = x + anim.offsetX + anim.velX * anim.t;
+        float ay = y + anim.offsetY + anim.velY * anim.t;
+
+        // 4) Typewriter reveal
+        std::string drawStr = text;
+        if (anim.typewriter) {
+            int maxGlyphs = (int)std::floor(anim.t * anim.charsPerSecond);
+            if (anim.maxChars >= 0 && maxGlyphs > anim.maxChars) maxGlyphs = anim.maxChars;
+            drawStr = takeFirstGlyphsASCII(text, maxGlyphs);
+        }
+
+        // 5) Draw using your alignment+wrap pipeline
+        drawTextAligned(r2d,
+            ax, ay,
+            drawStr,
+            scale,
+            tint,
+            alignH,
+            alignV,
+            maxWidth,
+            lineSpacingMult);
+    }
 
     void TextRenderer2D::drawText(Renderer2D& r2d,
         float x, float y,
