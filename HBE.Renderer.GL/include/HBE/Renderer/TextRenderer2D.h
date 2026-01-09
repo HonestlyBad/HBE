@@ -16,6 +16,32 @@ namespace HBE::Renderer {
 
     class TextRenderer2D {
     public:
+
+        enum class TextAlignH { Left, Center, Right };
+        enum class TextAlignV {Baseline, Top, Middle, Bottom};
+        
+        struct TextLayout {
+            float width = 0.0f;
+            float height = 0.0f;
+            int lineCount = 1;
+        };
+
+        // Measure without drawing.
+        // if maxWidth > 0, it wraps.
+        TextLayout measureText(const std::string& text, float scale = 1.0f, float maxWidth = 0.0f) const;
+
+        // drawText with alignment and optional wrapping.
+        // x,y refer to an anchor point based on alignH/alignV
+        void drawTextAligned(Renderer2D& r2d,
+            float x, float y,
+            const std::string& text,
+            float scale,
+            Color4 tint,
+            TextAlignH alignH,
+            TextAlignV alignV,
+            float maxWidth = 0.0f,
+            float lineSpacingMult = 1.25f);
+
         bool initialize(ResourceCache& cache, GLShader* spriteShader, Mesh* quadMesh);
 
         // Load a custom TTF/OTF and store it by name
@@ -45,6 +71,13 @@ namespace HBE::Renderer {
 
         bool buildDebugAtlas(ResourceCache& cache);
         void dbgUvForChar(unsigned char c, float outUVRect[4]) const;
+
+        // low-level draw (NO alignment/wrap, NO recursion)
+        void drawTextRaw(Renderer2D& r2d,
+            float x, float y,
+            const std::string& text,
+            float scale,
+            Color4 tint);
 
         // Real fonts
         std::unordered_map<std::string, Font> m_fonts;

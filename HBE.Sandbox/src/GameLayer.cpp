@@ -352,11 +352,28 @@ void GameLayer::onRender() {
         float y = 680.0f;
 
         // top-left: (10, LOGICAL_HEIGHT - 20)
-        std::string s = "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups);
-        m_text.drawText(r2d, x, y, "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups), 1.0f, HBE::Renderer::Color4{ 1,1,1,1 });
-        y -= lineSpacing;
-        m_text.drawText(r2d, x, y, "HELLO CUSTOM FONT", 1.0f, HBE::Renderer::Color4{ 0.9f,0.8f,0.2f,1 });
+        //std::string s = "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups);
+        //m_text.drawText(r2d, x, y, "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups), 1.0f, HBE::Renderer::Color4{ 1,1,1,1 });
+        //m_text.drawTextAligned(r2d, x, y, s, 1.0f, HBE::Renderer::Color4{ 1,1,1,1 }, TextRenderer2D::TextAlignH::Left, TextRenderer2D::TextAlignV::Middle, 600.0f);
+        
         //m_text.drawText(r2d, 10.0f, LOGICAL_HEIGHT - 26.0f, s, 2.0f);
+        m_text.drawTextAligned(r2d,
+            20.0f, 680.0f,
+            "This is a long sentence that should wrap nicely within a box.",
+            1.0f,
+            { 1,1,1,1 },
+            TextRenderer2D::TextAlignH::Left,
+            TextRenderer2D::TextAlignV::Baseline,
+            400.0f);
+        m_text.drawTextAligned(r2d,
+            LOGICAL_WIDTH * 0.5f, LOGICAL_HEIGHT * 0.5f,
+            "Centered text\nwith two lines",
+            1.0f,
+            { 1,1,0,1 },
+            TextRenderer2D::TextAlignH::Center,
+            TextRenderer2D::TextAlignV::Middle,
+            600.0f);
+
 
         r2d.endScene();
         return;

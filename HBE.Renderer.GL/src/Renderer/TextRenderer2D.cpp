@@ -13,6 +13,10 @@
 
 namespace HBE::Renderer {
 
+    static bool isWhitespace(char c) {
+        return c == ' ' || c == '\t';
+    }
+
     static void putPixel(std::vector<unsigned char>& rgba, int w, int x, int y, unsigned char a) {
         int i = (y * w + x) * 4;
         rgba[i + 0] = 255;
@@ -145,7 +149,278 @@ namespace HBE::Renderer {
         outUVRect[3] = vS;
     }
 
+    TextRenderer2D::TextLayout TextRenderer2D::measureText(
+        const std::string& text,
+        float scale,
+        float maxWidth) const
+    {
+        TextLayout out{};
+        out.lineCount = 1;
+
+        // Use active font if available; otherwise debug font metrics.
+        const bool useTTF = (m_activeFont && m_activeFont->texture());
+
+        float lineHeight = 0.0f;
+        if (useTTF) {
+            lineHeight = m_activeFont->pixelHeight() * scale;
+        }
+        else {
+            lineHeight = (float)m_dbgGlyphH * scale;
+        }
+
+        float lineSpacing = lineHeight * 1.25f;
+        float curLineW = 0.0f;
+        float maxLineW = 0.0f;
+
+        auto commitLine = [&]() {
+            if (curLineW > maxLineW) maxLineW = curLineW;
+            curLineW = 0.0f;
+            out.lineCount++;
+            };
+
+        if (!useTTF) {
+            // Debug font: fixed width characters
+            const float gw = (float)m_dbgGlyphW * scale;
+
+            for (size_t i = 0; i < text.size(); ++i) {
+                char ch = text[i];
+
+                if (ch == '\n') {
+                    commitLine();
+                    continue;
+                }
+
+                // wrap
+                if (maxWidth > 0.0f && curLineW + gw > maxWidth && curLineW > 0.0f) {
+                    commitLine();
+                }
+
+                curLineW += gw;
+            }
+
+            if (curLineW > maxLineW) maxLineW = curLineW;
+
+            out.width = maxLineW;
+            out.height = (out.lineCount * lineSpacing);
+            return out;
+        }
+
+        // TTF font: use buildQuad to advance pen
+        float penX = 0.0f;
+        float penY = 0.0f;
+
+        float lineStartPenX = penX;
+
+        // Wrapping strategy: word-wrap by measuring word widths.
+        size_t i = 0;
+        while (i < text.size()) {
+            char ch = text[i];
+
+            if (ch == '\n') {
+                // commit current line
+                curLineW = (penX - lineStartPenX) * scale;
+                if (curLineW > maxLineW) maxLineW = curLineW;
+
+                // new line
+                out.lineCount++;
+                penX = 0.0f;
+                penY += m_activeFont->pixelHeight(); // advance baseline down in stb-space
+                lineStartPenX = penX;
+                i++;
+                continue;
+            }
+
+            // If wrapping enabled, measure next "word" width.
+            if (maxWidth > 0.0f && isWhitespace(ch) == false) {
+                // Measure word width without committing
+                float testPenX = penX;
+                float testPenY = penY;
+
+                size_t j = i;
+                while (j < text.size() && text[j] != '\n' && !isWhitespace(text[j])) {
+                    float x0, y0, x1, y1, u0, v0, u1, v1;
+                    float px = testPenX;
+                    float py = testPenY;
+                    if (m_activeFont->buildQuad(text[j], px, py, x0, y0, x1, y1, u0, v0, u1, v1)) {
+                        testPenX = px;
+                        testPenY = py;
+                    }
+                    else {
+                        testPenX += (m_activeFont->pixelHeight() * 0.5f);
+                    }
+                    j++;
+                }
+
+                float wordW = (testPenX - penX) * scale;
+                float currentW = (penX - lineStartPenX) * scale;
+
+                if (currentW > 0.0f && currentW + wordW > maxWidth) {
+                    // commit line and wrap before the word
+                    if (currentW > maxLineW) maxLineW = currentW;
+
+                    out.lineCount++;
+                    penX = 0.0f;
+                    penY += m_activeFont->pixelHeight();
+                    lineStartPenX = penX;
+                    continue; // retry this word on new line (don’t advance i)
+                }
+            }
+
+            // Advance by this character
+            float x0, y0, x1, y1, u0, v0, u1, v1;
+            float px = penX;
+            float py = penY;
+
+            if (m_activeFont->buildQuad(ch, px, py, x0, y0, x1, y1, u0, v0, u1, v1)) {
+                penX = px;
+                penY = py;
+            }
+            else {
+                penX += (m_activeFont->pixelHeight() * 0.5f);
+            }
+
+            i++;
+        }
+
+        // last line
+        curLineW = (penX - lineStartPenX) * scale;
+        if (curLineW > maxLineW) maxLineW = curLineW;
+
+        out.width = maxLineW;
+        out.height = (out.lineCount * lineSpacing);
+        return out;
+    }
+
+
     void TextRenderer2D::drawText(Renderer2D& r2d,
+        float x, float y,
+        const std::string& text,
+        float scale,
+        Color4 tint)
+    {
+        drawTextAligned(r2d, x, y, text, scale, tint,
+            TextAlignH::Left, TextAlignV::Baseline,
+            0.0f, 1.25f);
+    }
+
+
+    void TextRenderer2D::drawTextAligned(Renderer2D& r2d,
+        float x, float y,
+        const std::string& text,
+        float scale,
+        Color4 tint,
+        TextAlignH alignH,
+        TextAlignV alignV,
+        float maxWidth,
+        float lineSpacingMult)
+    {
+        if (!m_quad) return;
+
+        // Measure block first (for alignment)
+        TextLayout layout = measureText(text, scale, maxWidth);
+
+        float startX = x;
+        float startY = y;
+
+        // Horizontal alignment shifts X by width
+        if (alignH == TextAlignH::Center) startX -= layout.width * 0.5f;
+        else if (alignH == TextAlignH::Right) startX -= layout.width;
+
+        // Vertical alignment shifts Y by height
+        if (alignV == TextAlignV::Top) startY += layout.height;
+        else if (alignV == TextAlignV::Middle) startY += layout.height * 0.5f;
+        else if (alignV == TextAlignV::Bottom) startY += 0.0f;
+        // Baseline: leave as-is
+
+        // Now draw line by line using your existing drawText logic:
+        // We’ll split into lines with wrapping if needed, and call drawText for each line.
+        const bool useTTF = (m_activeFont && m_activeFont->texture());
+
+        float lineHeight = useTTF ? (m_activeFont->pixelHeight() * scale) : ((float)m_dbgGlyphH * scale);
+        float lineSpacing = lineHeight * lineSpacingMult;
+
+        // Build wrapped lines
+        std::vector<std::string> lines;
+        lines.reserve(8);
+
+        auto pushLine = [&](const std::string& s) { lines.push_back(s); };
+
+        if (maxWidth <= 0.0f) {
+            // Just split on '\n'
+            std::string cur;
+            for (char ch : text) {
+                if (ch == '\n') { pushLine(cur); cur.clear(); }
+                else cur.push_back(ch);
+            }
+            pushLine(cur);
+        }
+        else {
+            // Word wrap
+            std::string cur;
+            std::string word;
+
+            auto flushWord = [&]() {
+                if (word.empty()) return;
+
+                std::string test = cur;
+                if (!test.empty()) test.push_back(' ');
+                test += word;
+
+                float testW = measureText(test, scale, 0.0f).width;
+
+                if (!cur.empty() && testW > maxWidth) {
+                    pushLine(cur);
+                    cur = word;
+                }
+                else {
+                    if (!cur.empty()) cur.push_back(' ');
+                    cur += word;
+                }
+                word.clear();
+                };
+
+            for (size_t i = 0; i < text.size(); ++i) {
+                char ch = text[i];
+
+                if (ch == '\n') {
+                    flushWord();
+                    pushLine(cur);
+                    cur.clear();
+                    continue;
+                }
+
+                if (isWhitespace(ch)) {
+                    flushWord();
+                }
+                else {
+                    word.push_back(ch);
+                }
+            }
+
+            flushWord();
+            pushLine(cur);
+        }
+
+        // Draw each line with per-line horizontal alignment inside the block
+        float lineY = startY;
+        for (size_t i = 0; i < lines.size(); ++i) {
+            const std::string& line = lines[i];
+
+            // measure line width for per-line alignment inside maxWidth
+            float lineW = measureText(line, scale, 0.0f).width;
+
+            float lineX = startX;
+            if (alignH == TextAlignH::Center) lineX = startX + (layout.width - lineW) * 0.5f;
+            else if (alignH == TextAlignH::Right) lineX = startX + (layout.width - lineW);
+
+            // Use your existing drawText (baseline at lineY)
+            drawTextRaw(r2d, lineX, lineY, line, scale, tint);
+
+            lineY -= lineSpacing; // next line down
+        }
+    }
+
+    void TextRenderer2D::drawTextRaw(Renderer2D& r2d,
         float x, float y,
         const std::string& text,
         float scale,
@@ -158,14 +433,21 @@ namespace HBE::Renderer {
         item.material = &m_mat;
         item.transform.rotation = 0.0f;
 
-        // Tint works only if the shader supports uColor (we’ll update that next)
         m_mat.color = tint;
 
         float penX = x;
         float penY = y; // baseline
 
+        // ----- TTF path -----
         if (m_activeFont && m_activeFont->texture()) {
             for (char ch : text) {
+                if (ch == '\n') {
+                    // newline: move down one line (you can tune this later)
+                    penX = x;
+                    penY -= (m_activeFont->pixelHeight() * 1.25f) * scale;
+                    continue;
+                }
+
                 float x0, y0, x1, y1;
                 float u0, v0, u1, v1;
 
@@ -180,13 +462,13 @@ namespace HBE::Renderer {
                     continue;
                 }
 
+                // advance pen for NEXT glyph
                 penX = oldPenX + (px - oldPenX) * scale;
                 penY = oldPenY + (py - oldPenY) * scale;
 
+                // flip Y around baseline (your engine is Y-up)
                 float sx0 = x + (x0 - x) * scale;
                 float sx1 = x + (x1 - x) * scale;
-
-                // Flip Y around baseline y (because stb gives y-down coords)
                 float sy0 = y - (y0 - y) * scale;
                 float sy1 = y - (y1 - y) * scale;
 
@@ -209,9 +491,7 @@ namespace HBE::Renderer {
             return;
         }
 
-        
-
-        // Fallback: debug bitmap font path (fixed 8x8)
+        // ----- Debug bitmap fallback (fixed 8x8) -----
         const float gw = (float)m_dbgGlyphW * scale;
         const float gh = (float)m_dbgGlyphH * scale;
 
@@ -219,20 +499,26 @@ namespace HBE::Renderer {
         item.transform.scaleY = gh;
 
         for (char ch : text) {
-            unsigned char c = (unsigned char)ch;
+            if (ch == '\n') {
+                penX = x;
+                penY -= gh * 1.25f;
+                continue;
+            }
 
+            unsigned char c = (unsigned char)ch;
             if (kDebugGlyphs.find((char)c) == kDebugGlyphs.end())
                 c = (unsigned char)' ';
 
             dbgUvForChar(c, item.uvRect);
 
             item.transform.posX = penX + gw * 0.5f;
-            item.transform.posY = y + gh * 0.5f;
-
+            item.transform.posY = penY + gh * 0.5f;
 
             r2d.draw(item);
             penX += gw;
         }
     }
+
+
 
 } // namespace HBE::Renderer
