@@ -34,6 +34,11 @@ public:
 	float  m_fps = 0.0f;
 	float  m_ups = 0.0f;
 
+	// slider
+	float m_volume = 0.75f;
+	float m_brightness = 1.0f;
+	int m_statBars = 5;
+
 	float m_uiAnimT = 0.0f;
 
 	bool onEvent(HBE::Core::Event& e);

@@ -18,6 +18,12 @@ namespace HBE::Renderer::UI {
 		HBE::Renderer::Color4 text{ 1.00f, 1.00f, 1.00f, 1.00f };
 		HBE::Renderer::Color4 textMuted{ 1.00f, 1.00f, 1.00f, 0.65f };
 
+		// Slider
+		HBE::Renderer::Color4 sliderTrack{ 0.12f, 0.12f, 0.16f, 0.95f };
+		HBE::Renderer::Color4 sliderFill{ 0.25f, 0.55f, 0.95f, 0.95f };
+		HBE::Renderer::Color4 sliderKnob{ 0.90f, 0.90f, 0.90f, 1.00f };
+		HBE::Renderer::Color4 sliderKnobHover{ 1.00f, 1.00f, 1.00f, 1.00f };
+
 		// Layout
 		float padding = 10.0f;
 		float itemH = 32.0f;

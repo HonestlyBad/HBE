@@ -46,6 +46,10 @@ namespace HBE::Renderer::UI {
 		// a button that toggles a bool (returns true if toggled)
 		bool toggleButton(const char* id, const char* text, bool& value);
 
+		// sliders
+		bool sliderFloat(const char* id, const char* label, float& value, float min, float max, float step = 0.0f);
+		bool sliderInt(const char* id, const char* label, int& value, int min, int max);
+
 		// expose mouse
 		float mouseX() const { return m_mouseX; }
 		float mouseY() const { return m_mouseY; }

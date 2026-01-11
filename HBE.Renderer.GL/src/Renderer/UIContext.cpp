@@ -1,6 +1,8 @@
 #include "HBE/Renderer/UI/UIContext.h"
 
 #include <cstring>
+#include <cstdio>
+#include <cmath>
 
 namespace HBE::Renderer::UI{
 
@@ -12,6 +14,26 @@ namespace HBE::Renderer::UI{
 			h *= 16777619u;
 		}
 		return h;
+	}
+
+	static float clampf(float v, float lo, float hi) {
+		if (v < lo) return lo;
+		if (v > hi) return hi;
+		return v;
+	}
+
+	static float invLerp(float a, float b, float v) {
+		if (a == b) return 0.0f;
+		return (v - a) / (b - a);
+	}
+
+	static float lerp(float a, float b, float t) {
+		return a + (b - a) * t;
+	}
+
+	static float snapStep(float v, float step) {
+		if (step <= 0.0f) return v;
+		return std::round(v / step) * step;
 	}
 
 	void UIContext::bind(HBE::Renderer::Renderer2D* r2d, HBE::Renderer::DebugDraw2D* debug, HBE::Renderer::TextRenderer2D* text) {
@@ -390,6 +412,149 @@ namespace HBE::Renderer::UI{
 			return true;
 		}
 		return false;
+	}
+
+	bool UIContext::sliderFloat(const char* id, const char* label, float& value, float min, float max, float step) {
+		if (m_panels.empty() || !m_r2d || !m_debug || !m_text) return false;
+		if (max <= min) return false;
+
+		auto& p = m_panels.back();
+
+		// Layout row
+		UIRect row;
+		row.x = p.cursorX;
+		row.w = p.content.w;
+		row.h = m_style.itemH;
+		row.y = p.cursorY - row.h;
+
+		p.cursorY -= (row.h + m_style.spacing);
+
+		// split row: label left, slider track right
+		const float labelW = row.w * 0.42f;
+		const float gap = 10.0f;
+
+		UIRect labelRect{ row.x, row.y, labelW, row.h };
+
+		UIRect trackRect;
+		trackRect.x = row.x + labelW + gap;
+		trackRect.y = row.y + row.h * 0.35f;
+		trackRect.w = row.w - labelW - gap;
+		trackRect.h = row.h * 0.30f;
+
+		// Interaction area should be bigger than the thin track
+		UIRect hitRect;
+		hitRect.x = trackRect.x;
+		hitRect.y = row.y;
+		hitRect.w = trackRect.w;
+		hitRect.h = row.h;
+
+		const std::uint32_t hid = hashId(id);
+
+		// Seed persistent state
+		auto it = m_boolState.find(hid);
+
+		bool hovered = m_mouseInViewport && hitRect.contains(m_mouseX, m_mouseY);
+		if (hovered) m_hot = hid;
+
+		// capture on press
+		if (hovered && m_mousePressedL) {
+			m_active = hid;
+		}
+
+		bool changed = false;
+
+		// While active and mouse held, update value based on mouseX
+		if (m_active == hid && m_mouseDownL && m_mouseInViewport) {
+			float t = invLerp(trackRect.x, trackRect.x + trackRect.w, m_mouseX);
+			t = clampf(t, 0.0f, 1.0f);
+
+			float newV = lerp(min, max, t);
+			newV = snapStep(newV, step);
+			newV = clampf(newV, min, max);
+
+			if (newV != value) {
+				value = newV;
+				changed = true;
+			}
+		}
+
+		 // draw label
+		{
+			auto layout = m_text->measureText(label, m_style.textScale, 0.0f);
+			float approxLineH = (layout.lineCount > 0) ? (layout.height / (float)layout.lineCount) : layout.height;
+			float baseLineY = labelRect.y + (labelRect.h + layout.height) * 0.5f - (approxLineH * m_style.baselineFudgeMul);
+
+			m_text->drawTextAligned(*m_r2d, labelRect.x, baseLineY, label, m_style.textScale, m_style.textMuted,
+				TextRenderer2D::TextAlignH::Left,
+				TextRenderer2D::TextAlignV::Baseline,
+				0.0f,
+				1.25f);
+		}
+
+		// track
+		drawFilledRect(trackRect, m_style.sliderTrack);
+		drawBorderRect(trackRect, m_style.btnBorder);
+
+		// fill + knob
+		float tVal = invLerp(min, max, value);
+		tVal = clampf(tVal, 0.0f, 1.0f);
+
+		UIRect fill = trackRect;
+		fill.w = trackRect.w * tVal;
+
+		if (fill.w > 0.0f) drawFilledRect(fill, m_style.sliderFill);
+
+		// knob is a small rect
+		const float knobW = row.h * 0.22f;
+		const float knobH = row.h * 0.55f;
+		float knobX = trackRect.x + trackRect.w * tVal - knobW * 0.5f;
+
+		UIRect knob;
+		knob.x = knobX;
+		knob.y = row.y + (row.h - knobH) * 0.5f;
+		knob.w = knobW;
+		knob.h = knobH;
+
+		bool knobHover = m_mouseInViewport && hitRect.contains(m_mouseX, m_mouseY);
+		drawFilledRect(knob, knobHover ? m_style.sliderKnobHover : m_style.sliderKnob);
+		drawBorderRect(knob, m_style.btnBorder);
+
+		// value text on the far right of the row
+		{
+			char buf[64];
+			std::snprintf(buf, sizeof(buf), "%.2f", value);
+
+			UIRect valueRect;
+			valueRect.x = trackRect.x;
+			valueRect.y = row.y;
+			valueRect.w = trackRect.w;
+			valueRect.h = row.h;
+
+			auto layout = m_text->measureText(buf, m_style.textScale, 0.0f);
+			float approxLineH = (layout.lineCount > 0) ? (layout.height / (float)layout.lineCount) : layout.height;
+			float baselineY = valueRect.y + (valueRect.h + layout.height) * 0.5f - (approxLineH * m_style.baselineFudgeMul);
+
+			m_text->drawTextAligned(*m_r2d, valueRect.x + valueRect.w, baselineY, buf, m_style.textScale, m_style.text,
+				TextRenderer2D::TextAlignH::Right,
+				TextRenderer2D::TextAlignV::Baseline,
+				0.0f,
+				1.25f);
+		}
+		
+		return changed;
+	}
+
+	bool UIContext::sliderInt(const char* id, const char* label, int& value, int min, int max) {
+		float v = (float)value;
+		bool changed = sliderFloat(id, label, v, (float)min, (float)max, 1.0f);
+		int iv = (int)std::round(v);
+		iv = (iv < min) ? min : (iv > max ? max : iv);
+
+		if (iv != value) {
+			value = iv;
+			return true;
+		}
+		return changed;
 	}
 
 	void UIContext::spacing(float h) {

@@ -388,9 +388,9 @@ void GameLayer::onRender() {
 
     UIRect panel;
     panel.x = 20.0f;
-    panel.y = 420.0f;
+    panel.y = 320.0f;
     panel.w = 260.0f;
-    panel.h = 260.0f;
+    panel.h = 360.0f;
 
     m_ui.beginPanel("main_panel", panel, "HBE UI");
 
@@ -404,7 +404,12 @@ void GameLayer::onRender() {
     m_ui.checkbox("cb_debug", "Debug Draw", m_uiDebugDraw);
     m_debugDraw = m_uiDebugDraw;
 
-    m_ui.checkbox("cb_god", "God Mode", m_uiGodMode);
+    m_ui.spacing(6.0f);
+
+    m_ui.sliderFloat("sdl_volume", "Volume", m_volume, 0.0f, 1.0f, 0.01f);
+    m_ui.sliderFloat("sld_bright", "Brightness", m_brightness, 0.2f, 2.0f, 0.01f);
+    m_ui.sliderInt("sld_bars", "Stat Bars", m_statBars, 1, 10);
+
     m_ui.spacing(6.0f);
 
     if (m_ui.button("btn_3", "Quit")) {
