@@ -293,6 +293,15 @@ void GameLayer::onUpdate(float dt) {
     m_camera.x = tr->posX;
     m_camera.y = tr->posY;
     m_app->gl().setCamera(m_camera);
+
+    // debug popup aging / movement
+    for (auto& p : m_popups) {
+        p.life -= dt;
+        p.y += p.floatSpeed * dt; // float upward
+    }
+
+    // remove dead
+    m_popups.erase(std::remove_if(m_popups.begin(), m_popups.end(), [](const DebugPopup& p) {return p.life <= 0.0f; }), m_popups.end());
 }
 
 void GameLayer::onRender() {
@@ -322,7 +331,7 @@ void GameLayer::onRender() {
     Transform2D* tr = m_scene.getTransform(m_goblinEntity);
     if (tr) {
         m_text.drawTextAnimated(r2d,
-            tr->posX, tr->posY + 80.0f,   // above player
+            tr->posX, tr->posY + 40.0f,   // above player
             "-25",
             1.0f,
             { 1,0.2f,0.2f,1 },
@@ -390,23 +399,26 @@ void GameLayer::onRender() {
         //m_text.drawTextAligned(r2d, 20.0f, 680.0f, "This is a long sentence that should wrap nicely within a box.", 1.0f, { 1,1,1,1 }, TextRenderer2D::TextAlignH::Left, TextRenderer2D::TextAlignV::Baseline, 400.0f);
         //m_text.drawTextAligned(r2d, LOGICAL_WIDTH * 0.5f, LOGICAL_HEIGHT * 0.5f, "Centered text\nwith two lines", 1.0f, { 1,1,0,1 }, TextRenderer2D::TextAlignH::Center, TextRenderer2D::TextAlignV::Middle, 600.0f);
 
-        HBE::Renderer::TextRenderer2D::TextAnim a{};
-        a.t = m_uiAnimT;
-        a.typewriter = true;
-        a.charsPerSecond = 25.0f;
-        a.fadeIn = true;
-        a.fadeInTime = 0.25f;
+        //HBE::Renderer::TextRenderer2D::TextAnim a{};
+        //a.t = m_uiAnimT;
+        //a.typewriter = true;
+        //a.charsPerSecond = 25.0f;
+        //a.fadeIn = true;
+        //a.fadeInTime = 0.25f;
 
-        m_text.drawTextAnimated(r2d,
-            20.0f, 680.0f,
-            "This is animated typewriter text that wraps nicely within a box.",
-            1.0f,
-            { 1,1,1,1 },
-            HBE::Renderer::TextRenderer2D::TextAlignH::Left,
-            HBE::Renderer::TextRenderer2D::TextAlignV::Baseline,
-            420.0f,
-            1.25f,
-            a);
+        //m_text.drawTextAnimated(r2d, 20.0f, 680.0f, "This is animated typewriter text that wraps nicely within a box.", 1.0f, { 1,1,1,1 }, HBE::Renderer::TextRenderer2D::TextAlignH::Left, HBE::Renderer::TextRenderer2D::TextAlignV::Baseline,
+        //            420.0f, 1.25f, a);
+
+        for (const auto& p : m_popups) {
+            // fade alpha based on remaining life
+            float t = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 0.0f;
+            if (t < 0.0f) t = 0.0f;
+            if (t > 1.0f) t = 1.0f;
+
+            auto c = p.color;
+            c.a *= t;
+            m_text.drawText(r2d, p.x, p.y, p.text, 1.0f, c);
+        }
 
         r2d.endScene();
         return;
@@ -430,5 +442,54 @@ bool GameLayer::onEvent(HBE::Core::Event& e) {
 
         return false; // not handled
     }
+    else if (e.type() == EventType::MouseButtonPressed) {
+        auto& mb = static_cast<MouseButtonPressedEvent&>(e);
+
+        if (mb.inViewport) {
+            // left = 1, middle = 2, right = 3 in SDL mouse button numbering
+            if (mb.button == 1) {
+                spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
+                return true;
+            }
+            else if (mb.button == 3) {
+                spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 1,0,0,1 }); // red
+                return true;
+            }
+            else if (mb.button == 2) {
+                spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,0,1,1 }); // blue
+                return true;
+            }
+        }
+        return false;
+    }
+    else if (e.type() == EventType::MouseScrolled) {
+        auto& ms = static_cast<MouseScrolledEvent&>(e);
+
+        if (ms.inViewport) {
+            // SDL Wheel convention: +Y = away from user (often "scroll up")
+            if (ms.wheelY > 0.0f) {
+                spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
+                return true;
+            }
+            else if (ms.wheelY < 0.0f) {
+                spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 1,0,0,1 });// red
+                return true;
+            }
+        }
+        return false;
+    }
     return false;
+}
+
+void GameLayer::spawnPopup(float x, float y, const std::string& text, const HBE::Renderer::Color4& color, float lifetimeSeconds, float floatUpSpeed) {
+    DebugPopup p;
+    p.text = text;
+    p.x = x;
+    p.y = y;
+    p.color = color;
+    p.life = lifetimeSeconds;
+    p.maxLife = lifetimeSeconds;
+    p.floatSpeed = floatUpSpeed;
+
+    m_popups.push_back(std::move(p));
 }

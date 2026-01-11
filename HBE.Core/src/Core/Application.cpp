@@ -143,6 +143,7 @@ namespace HBE::Core {
 		HBE::Platform::Input::HandleEvent(e);
 
 		switch (e.type) {
+		// -------- Keyboard Events ----------
 		case SDL_EVENT_KEY_DOWN: {
 			const int sc = static_cast<int>(e.key.scancode);
 			const bool repeat = (e.key.repeat != 0);
@@ -161,14 +162,68 @@ namespace HBE::Core {
 			}
 			break;
 		}
-
-							   // SDL3 has multiple size-related events. These are the ones you’ll commonly see.
+		// -------- Window Resize Events ----------
+		// SDL3 has multiple size-related events. These are the ones you’ll commonly see.
 		case SDL_EVENT_WINDOW_RESIZED:
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
 			recalcViewportAndNotify();
 			break;
 		}
+		// -------- Mouse Events ----------
+		case SDL_EVENT_MOUSE_MOTION: {
+			// window coords (top-left origin)
+			const float mx = e.motion.x;
+			const float my = e.motion.y;
+			const float dx = e.motion.xrel;
+			const float dy = e.motion.yrel;
 
+			Vec2 logical{};
+			const bool inVp = screenToLogical(static_cast<int>(mx), static_cast<int>(my), logical);
+
+			MouseMovedEvent mev(mx, my, dx, dy, inVp, logical.x, logical.y);
+			m_layers.dispatchEvent(mev);
+			break;
+		}
+		case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+			const int button = static_cast<int>(e.button.button);
+			const int clicks = static_cast<int>(e.button.clicks);
+			const float mx = e.button.x;
+			const float my = e.button.y;
+
+			Vec2 logical{};
+			const bool inVp = screenToLogical(static_cast<int>(mx), static_cast<int>(my), logical);
+
+			MouseButtonPressedEvent mb(button, clicks, mx, my, inVp, logical.x, logical.y);
+			m_layers.dispatchEvent(mb);
+			break;
+		}
+		case SDL_EVENT_MOUSE_BUTTON_UP: {
+			const int button = static_cast<int>(e.button.button);
+			const float mx = e.button.x;
+			const float my = e.button.y;
+
+			Vec2 logical{};
+			const bool inVp = screenToLogical(static_cast<int>(mx), static_cast<int>(my), logical);
+
+			MouseButtonReleasedEvent mb(button, mx, my, inVp, logical.x, logical.y);
+			m_layers.dispatchEvent(mb);
+			break;
+		}
+		case SDL_EVENT_MOUSE_WHEEL: {
+			// SDL convention: +y = away from user
+			float wx = e.wheel.x;
+			float wy = e.wheel.y;
+
+			const float mx = e.wheel.mouse_x;
+			const float my = e.wheel.mouse_y;
+
+			Vec2 logical{};
+			const bool inVp = screenToLogical(static_cast<int>(mx), static_cast<int>(my), logical);
+
+			MouseScrolledEvent ms(wx, wy, mx, my, inVp, logical.x, logical.y);
+			m_layers.dispatchEvent(ms);
+			break;
+		}
 		default:
 			break;
 		}

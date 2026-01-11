@@ -24,3 +24,5 @@ settings.VisualStudio.json
 /x64
 /HBE.Sandbox/assets/tiles
 /HBE.Sandbox/assets/maps
+/Chatgpt
+*.zip

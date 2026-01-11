@@ -13,6 +13,9 @@
 #include "HBE/Renderer/TileCollision.h"
 #include "HBE/Renderer/TextRenderer2D.h"
 
+#include <vector>
+#include <string>
+
 namespace HBE::Core { class Application; }
 
 class GameLayer final : public HBE::Core::Layer {
@@ -36,6 +39,21 @@ public:
 	bool m_debugDraw = true;
 
 private:
+
+	struct DebugPopup {
+		std::string text;
+		float x = 0.0f;
+		float y = 0.0f;
+		HBE::Renderer::Color4 color{ 1,1,1,1 };
+
+		float life = 0.0f; // seconds remaining
+		float maxLife = 0.0f; // seconds total
+		float floatSpeed = 0.0f;
+	};
+
+	std::vector<DebugPopup> m_popups;
+	void spawnPopup(float x, float y, const std::string& text, const HBE::Renderer::Color4& color, float lifetimeSeconds = 1.0f, float floatUpSpeed = 30.0f);
+
 	HBE::Core::Application* m_app = nullptr;
 
 	// Logical area
