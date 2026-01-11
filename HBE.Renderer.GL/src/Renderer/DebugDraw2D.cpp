@@ -69,10 +69,17 @@ namespace HBE::Renderer {
 
         m_mat.color = HBE::Renderer::Color4{ r, g, b, a };
 
-        if (!filled) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        // Save current state (so we don’t break the rest of the engine)
+        GLint prevMode[2];
+        glGetIntegerv(GL_POLYGON_MODE, prevMode);
+
+        glPolygonMode(GL_FRONT_AND_BACK, filled ? GL_FILL : GL_LINE);
         r2d.draw(item);
-        if (!filled) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+        // Restore previous state
+        glPolygonMode(GL_FRONT_AND_BACK, prevMode[0]);
     }
+
 
 
 } // namespace HBE::Renderer

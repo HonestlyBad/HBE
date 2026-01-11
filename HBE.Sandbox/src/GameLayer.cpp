@@ -48,6 +48,13 @@ void GameLayer::onAttach(Application& app) {
 
 	buildSpritePipeline();
 
+    HBE::Renderer::UI::UIStyle style;
+    style.textScale = 1.0f;
+    style.itemH = 34.0f;
+    style.padding = 12.0f;
+    style.spacing = 10.0f;
+    m_ui.setStyle(style);
+
     // load Tilemap
     std::string err;
     if (!HBE::Renderer::TileMapLoader::loadFromJsonFile("assets/maps/test_map.json", m_tileMap, &err)) {
@@ -229,6 +236,8 @@ void GameLayer::onUpdate(float dt) {
     m_statTimer += (double)dt;
     m_updateCount++;
 
+    m_ui.beginFrame(dt);
+
     if (m_statTimer >= 0.5) { // update twice per second
         const double window = m_statTimer;
 
@@ -306,9 +315,12 @@ void GameLayer::onUpdate(float dt) {
 
 void GameLayer::onRender() {
     m_frameCount++;
-    // for now, layer is responsible for rendering its own scene
+
     Renderer2D& r2d = m_app->renderer2D();
 
+    // -------------------------
+    // PASS 1: WORLD
+    // -------------------------
     r2d.beginScene(m_camera);
 
     // draw map
@@ -323,15 +335,14 @@ void GameLayer::onRender() {
     dmg.fadeInTime = 0.05f;
     dmg.fadeOut = true;
     dmg.fadeOutTime = 0.35f;
-    dmg.velY = 40.0f;          // world units/sec
+    dmg.velY = 40.0f;
     dmg.startScale = 1.2f;
     dmg.endScale = 1.0f;
 
-    // IMPORTANT: use PLAYER POSITION, not camera position
     Transform2D* tr = m_scene.getTransform(m_goblinEntity);
     if (tr) {
         m_text.drawTextAnimated(r2d,
-            tr->posX, tr->posY + 40.0f,   // above player
+            tr->posX, tr->posY + 40.0f,
             "-25",
             1.0f,
             { 1,0.2f,0.2f,1 },
@@ -342,95 +353,87 @@ void GameLayer::onRender() {
             dmg);
     }
 
-
-    // draw sprites/ entites
+    // draw sprites/entities
     m_scene.render(r2d);
 
+    // debug draw (WORLD)
     if (m_debugDraw) {
+        m_debug.rect(r2d, m_playerBox.cx, m_playerBox.cy,
+            m_playerBox.w, m_playerBox.h,
+            1, 0, 0, 1, false);
 
-        // 1) Draw player AABB (based on sprite transform for now)
-        // If you already have a real collision AABB, use that values instead.
-        Transform2D* tr = m_scene.getTransform(m_goblinEntity);
-        if (tr) {
-            // Approx player box: use sprite scale but slightly smaller if you want
-            float boxW = tr->scaleX * 0.60f;
-            float boxH = tr->scaleY * 0.80f;
-
-            m_debug.rect(r2d, m_playerBox.cx, m_playerBox.cy,
-                m_playerBox.w, m_playerBox.h,
-                1, 0, 0, 1, false); // red
-        }
-
-        // 2) OPTIONAL: draw a collision-grid cell size reference (16x16 = current collision code)
-        // This is the BIG one: if your rendered tiles are 64x64 (16*4),
-        // and collision uses 16x16, you’ll see the mismatch instantly.
-        //
-        // Example: draw a 16x16 cell at world origin
         m_debug.rect(r2d, 8.0f, 8.0f, 16.0f, 16.0f, 1, 1, 0, 1, false);
-
-        // If you want, also draw what a "rendered tile size" would be (example 64x64):
-        m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, 0, 1, 0, 1, false); // green
+        m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, 0, 1, 0, 1, false);
     }
-
-    if (m_debugDraw) {
-        // UI camera: screen-space
-        HBE::Renderer::Camera2D uiCam{};
-        uiCam.x = LOGICAL_WIDTH * 0.5f;
-        uiCam.y = LOGICAL_HEIGHT * 0.5f;
-        uiCam.zoom = 1.0f;
-        uiCam.viewportWidth = LOGICAL_WIDTH;
-        uiCam.viewportHeight = LOGICAL_HEIGHT;
-
-        // Draw overlay with UI camera
-        r2d.endScene();          // finish world
-        r2d.beginScene(uiCam);   // begin UI
-
-        float fontSize = 32.0f;
-        float lineSpacing = fontSize * 1.25f; // tweak this freely
-        float x = 20.0f;
-        float y = 680.0f;
-
-        // top-left: (10, LOGICAL_HEIGHT - 20)
-        //std::string s = "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups);
-        //m_text.drawText(r2d, x, y, "FPS: " + std::to_string((int)m_fps) + " UPS: " + std::to_string((int)m_ups), 1.0f, HBE::Renderer::Color4{ 1,1,1,1 });
-        //m_text.drawTextAligned(r2d, x, y, s, 1.0f, HBE::Renderer::Color4{ 1,1,1,1 }, TextRenderer2D::TextAlignH::Left, TextRenderer2D::TextAlignV::Middle, 600.0f);
-        
-        //m_text.drawText(r2d, 10.0f, LOGICAL_HEIGHT - 26.0f, s, 2.0f);
-        //m_text.drawTextAligned(r2d, 20.0f, 680.0f, "This is a long sentence that should wrap nicely within a box.", 1.0f, { 1,1,1,1 }, TextRenderer2D::TextAlignH::Left, TextRenderer2D::TextAlignV::Baseline, 400.0f);
-        //m_text.drawTextAligned(r2d, LOGICAL_WIDTH * 0.5f, LOGICAL_HEIGHT * 0.5f, "Centered text\nwith two lines", 1.0f, { 1,1,0,1 }, TextRenderer2D::TextAlignH::Center, TextRenderer2D::TextAlignV::Middle, 600.0f);
-
-        //HBE::Renderer::TextRenderer2D::TextAnim a{};
-        //a.t = m_uiAnimT;
-        //a.typewriter = true;
-        //a.charsPerSecond = 25.0f;
-        //a.fadeIn = true;
-        //a.fadeInTime = 0.25f;
-
-        //m_text.drawTextAnimated(r2d, 20.0f, 680.0f, "This is animated typewriter text that wraps nicely within a box.", 1.0f, { 1,1,1,1 }, HBE::Renderer::TextRenderer2D::TextAlignH::Left, HBE::Renderer::TextRenderer2D::TextAlignV::Baseline,
-        //            420.0f, 1.25f, a);
-
-        for (const auto& p : m_popups) {
-            // fade alpha based on remaining life
-            float t = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 0.0f;
-            if (t < 0.0f) t = 0.0f;
-            if (t > 1.0f) t = 1.0f;
-
-            auto c = p.color;
-            c.a *= t;
-            m_text.drawText(r2d, p.x, p.y, p.text, 1.0f, c);
-        }
-
-        r2d.endScene();
-        return;
-    }
-
-
 
     r2d.endScene();
+
+
+    // -------------------------
+    // PASS 2: UI OVERLAY
+    // -------------------------
+    HBE::Renderer::Camera2D uiCam{};
+    uiCam.x = LOGICAL_WIDTH * 0.5f;
+    uiCam.y = LOGICAL_HEIGHT * 0.5f;
+    uiCam.zoom = 1.0f;
+    uiCam.viewportWidth = LOGICAL_WIDTH;
+    uiCam.viewportHeight = LOGICAL_HEIGHT;
+
+    r2d.beginScene(uiCam);
+
+    // Bind UI renderer dependencies now that we’re in UI space
+    m_ui.bind(&m_app->renderer2D(), &m_debug, &m_text);
+
+    using namespace HBE::Renderer::UI;
+
+    UIRect panel;
+    panel.x = 20.0f;
+    panel.y = 420.0f;
+    panel.w = 260.0f;
+    panel.h = 260.0f;
+
+    m_ui.beginPanel("main_panel", panel, "HBE UI");
+
+    m_ui.label("Widgets online.", true);
+    m_ui.spacing(6.0f);
+
+    if (m_ui.button("btn_1", "Print Hello")) {
+        HBE::Core::LogInfo("Hello from UI button!");
+    }
+
+    if (m_ui.button("btn_2", "Toggle DebugDraw")) {
+        m_debugDraw = !m_debugDraw;
+    }
+
+    if (m_ui.button("btn_3", "Quit")) {
+        m_app->requestQuit();
+    }
+
+    m_ui.endPanel();
+
+    // (Optional) click/scroll popups (these are UI space too)
+    for (const auto& p : m_popups) {
+        float t = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 0.0f;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+
+        auto c = p.color;
+        c.a *= t;
+        m_text.drawText(r2d, p.x, p.y, p.text, 1.0f, c);
+    }
+
+    // End UI scene
+    r2d.endScene();
+
+    // Finish frame bookkeeping
+    m_ui.endFrame();
 }
+
 
 bool GameLayer::onEvent(HBE::Core::Event& e) {
     using namespace HBE::Core;
+
+    m_ui.onEvent(e);
 
     if (e.type() == EventType::WindowResize) {
         auto& re = static_cast<WindowResizeEvent&>(e);

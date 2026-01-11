@@ -12,6 +12,7 @@
 #include "HBE/Renderer/TileMapLoader.h"
 #include "HBE/Renderer/TileCollision.h"
 #include "HBE/Renderer/TextRenderer2D.h"
+#include "HBE/Renderer/UI/UIContext.h"
 
 #include <vector>
 #include <string>
@@ -39,6 +40,7 @@ public:
 	bool m_debugDraw = true;
 
 private:
+	HBE::Renderer::UI::UIContext m_ui{};
 
 	struct DebugPopup {
 		std::string text;
