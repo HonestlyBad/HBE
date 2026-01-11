@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "HBE/Renderer/UI/UIRect.h"
 #include "HBE/Renderer/UI/UIStyle.h"
@@ -38,6 +39,12 @@ namespace HBE::Renderer::UI {
 
 		// Manual button (no layout)
 		bool buttonRect(const char* id, const UIRect& rect, const char* text);
+
+		// checkbox (label to right0 returns true if value changed this frame
+		bool checkbox(const char* id, const char* label, bool& value);
+
+		// a button that toggles a bool (returns true if toggled)
+		bool toggleButton(const char* id, const char* text, bool& value);
 
 		// expose mouse
 		float mouseX() const { return m_mouseX; }
@@ -82,6 +89,9 @@ namespace HBE::Renderer::UI {
 		// Immediate-mode interaction
 		std::uint32_t m_hot = 0;
 		std::uint32_t m_active = 0;
+
+		// Persistent widget state keyed by hashed id
+		std::unordered_map<std::uint32_t, bool> m_boolState;
 
 		// Panel stack
 		std::vector<PanelState> m_panels;

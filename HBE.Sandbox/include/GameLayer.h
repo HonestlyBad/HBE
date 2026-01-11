@@ -38,6 +38,8 @@ public:
 
 	bool onEvent(HBE::Core::Event& e);
 	bool m_debugDraw = true;
+	bool m_uiDebugDraw = false;
+	bool m_uiGodMode = false;
 
 private:
 	HBE::Renderer::UI::UIContext m_ui{};

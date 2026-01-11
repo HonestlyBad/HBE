@@ -22,6 +22,7 @@ namespace HBE::Renderer::UI {
 		float padding = 10.0f;
 		float itemH = 32.0f;
 		float spacing = 8.0f;
+		float baselineFudgeMul = 0.55f;
 
 		// Text scale
 		float textScale = 1.0f;

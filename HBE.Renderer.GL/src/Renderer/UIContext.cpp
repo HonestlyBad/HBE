@@ -250,7 +250,7 @@ namespace HBE::Renderer::UI{
 		// Compute baseline Y for vertical centering.
 		// drawTextAligned expects y to be a BASELINE when alignV == Baseline.
 		float approxLineH = (layout.lineCount > 0) ? (layout.height / (float)layout.lineCount) : layout.height;
-		float baselineFudge = approxLineH * 0.55f;  // tweak: 0.20f..0.35f depending on font
+		float baselineFudge = approxLineH * m_style.baselineFudgeMul;  // tweak in UIStyle.h: baselineFudgeMul
 
 		const float baselineY = rect.y + (rect.h + layout.height) * 0.5f - baselineFudge;
 
@@ -267,6 +267,129 @@ namespace HBE::Renderer::UI{
 
 
 		return clicked;
+	}
+
+	bool UIContext::checkbox(const char* id, const char* label, bool& value) {
+		if (m_panels.empty() || !m_r2d || !m_debug || !m_text) return false;
+
+		auto& p = m_panels.back();
+
+		// Layout row (full width, one item tall)
+		UIRect row;
+		row.x = p.cursorX;
+		row.w = p.content.w;
+		row.h = m_style.itemH;
+		row.y = p.cursorY - row.h;
+
+		// advance cursor
+		p.cursorY -= (row.h + m_style.spacing);
+
+		// checkbox square
+		const float boxSize = row.h * 0.60f;
+		const float boxPadY = (row.h - boxSize) * 0.5f;
+
+		UIRect box;
+		box.x = row.x;
+		box.y = row.y + boxPadY;
+		box.w = boxSize;
+		box.h = boxSize;
+
+		// label rect to the right
+		const float labelPadX = 10.0f;
+
+		UIRect labelRect;
+		labelRect.x = box.x + box.w + labelPadX;
+		labelRect.y = row.y;
+		labelRect.w = row.w - (box.w + labelPadX);
+		labelRect.h = row.h;
+
+		const std::uint32_t hid = hashId(id);
+
+		// seed persistent state once
+		auto it = m_boolState.find(hid);
+		if (it == m_boolState.end()) {
+			m_boolState[hid] = value;
+		}
+		else {
+			value = it->second; // keep caller value synced.
+		}
+
+		// Interaction over whole row
+		const bool hovered = m_mouseInViewport && row.contains(m_mouseX, m_mouseY);
+		if (hovered) m_hot = hid;
+
+		if (hovered && m_mousePressedL) {
+			m_active = hid;
+		}
+
+		bool changed = false;
+		if (m_mouseReleasedL) {
+			if (hovered && m_active == hid) {
+				value = !value;
+				m_boolState[hid] = value;
+				changed = true;
+			}
+		}
+
+		// draw row hover highlight (subtle)
+		if (hovered) {
+			drawFilledRect(row, HBE::Renderer::Color4{ 0.22f, 0.22f, 0.27f, 0.35f });
+		}
+
+		// Draw Box
+		drawFilledRect(box, HBE::Renderer::Color4{ 0.12f, 0.12f, 0.16f, 0.95f });
+		drawBorderRect(box, m_style.btnBorder);
+
+		// fill inner if checked
+		if (value) {
+			const float inset = 4.0f;
+			UIRect inner;
+			inner.x = box.x + inset;
+			inner.y = box.y + inset;
+			inner.w = box.w - inset * 2.0f;
+			inner.h = box.h - inset * 2.0f;
+
+			// green check fill 
+			drawFilledRect(inner, HBE::Renderer::Color4{ 0.20f, 0.85f, 0.35f, 1.0f });
+		}
+
+		// Draw label (vertically centered baseline like button)
+		auto layout = m_text->measureText(label, m_style.textScale, 0.0f);
+
+		float approxLineH = (layout.lineCount > 0) ? (layout.height / (float)layout.lineCount) : layout.height;
+		float baselineFudge = approxLineH * m_style.baselineFudgeMul;
+		const float baselineY = labelRect.y + (labelRect.h + layout.height) * 0.5f - baselineFudge;
+
+		m_text->drawTextAligned(*m_r2d, labelRect.x, baselineY, label,
+			m_style.textScale, m_style.text,
+			HBE::Renderer::TextRenderer2D::TextAlignH::Left,
+			HBE::Renderer::TextRenderer2D::TextAlignV::Baseline,
+			0.0f,
+			1.25f);
+
+		return changed;
+	}
+
+	bool UIContext::toggleButton(const char* id, const char* text, bool& value) {
+		const std::uint32_t hid = hashId(id);
+
+		// seed / sync state
+		auto it = m_boolState.find(hid);
+		if (it == m_boolState.end()) {
+			m_boolState[hid] = value;
+		}
+		else {
+			value = it->second;
+		}
+
+		// use normal button interaction
+		bool pressed = button(id, text);
+		if (pressed) {
+			value = !value;
+			m_boolState[hid] = value;
+			return true;
+		}
+		return false;
 	}
 
 	void UIContext::spacing(float h) {

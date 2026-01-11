@@ -383,7 +383,7 @@ void GameLayer::onRender() {
 
     // Bind UI renderer dependencies now that we’re in UI space
     m_ui.bind(&m_app->renderer2D(), &m_debug, &m_text);
-
+    
     using namespace HBE::Renderer::UI;
 
     UIRect panel;
@@ -401,9 +401,11 @@ void GameLayer::onRender() {
         HBE::Core::LogInfo("Hello from UI button!");
     }
 
-    if (m_ui.button("btn_2", "Toggle DebugDraw")) {
-        m_debugDraw = !m_debugDraw;
-    }
+    m_ui.checkbox("cb_debug", "Debug Draw", m_uiDebugDraw);
+    m_debugDraw = m_uiDebugDraw;
+
+    m_ui.checkbox("cb_god", "God Mode", m_uiGodMode);
+    m_ui.spacing(6.0f);
 
     if (m_ui.button("btn_3", "Quit")) {
         m_app->requestQuit();
@@ -445,42 +447,42 @@ bool GameLayer::onEvent(HBE::Core::Event& e) {
 
         return false; // not handled
     }
-    else if (e.type() == EventType::MouseButtonPressed) {
-        auto& mb = static_cast<MouseButtonPressedEvent&>(e);
+    //else if (e.type() == EventType::MouseButtonPressed) {
+    //    auto& mb = static_cast<MouseButtonPressedEvent&>(e);
 
-        if (mb.inViewport) {
-            // left = 1, middle = 2, right = 3 in SDL mouse button numbering
-            if (mb.button == 1) {
-                spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
-                return true;
-            }
-            else if (mb.button == 3) {
-                spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 1,0,0,1 }); // red
-                return true;
-            }
-            else if (mb.button == 2) {
-                spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,0,1,1 }); // blue
-                return true;
-            }
-        }
-        return false;
-    }
-    else if (e.type() == EventType::MouseScrolled) {
-        auto& ms = static_cast<MouseScrolledEvent&>(e);
+    //    if (mb.inViewport) {
+    //        // left = 1, middle = 2, right = 3 in SDL mouse button numbering
+    //        if (mb.button == 1) {
+    //            spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
+    //            return true;
+    //        }
+    //        else if (mb.button == 3) {
+    //            spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 1,0,0,1 }); // red
+    //            return true;
+    //        }
+    //        else if (mb.button == 2) {
+    //            spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,0,1,1 }); // blue
+    //            return true;
+    //        }
+    //    }
+    //    return false;
+    //}
+    //else if (e.type() == EventType::MouseScrolled) {
+    //    auto& ms = static_cast<MouseScrolledEvent&>(e);
 
-        if (ms.inViewport) {
-            // SDL Wheel convention: +Y = away from user (often "scroll up")
-            if (ms.wheelY > 0.0f) {
-                spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
-                return true;
-            }
-            else if (ms.wheelY < 0.0f) {
-                spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 1,0,0,1 });// red
-                return true;
-            }
-        }
-        return false;
-    }
+    //    if (ms.inViewport) {
+    //        // SDL Wheel convention: +Y = away from user (often "scroll up")
+    //        if (ms.wheelY > 0.0f) {
+    //            spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
+    //            return true;
+    //        }
+    //        else if (ms.wheelY < 0.0f) {
+    //            spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 1,0,0,1 });// red
+    //            return true;
+    //        }
+    //    }
+    //    return false;
+    //}
     return false;
 }
 
