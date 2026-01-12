@@ -118,11 +118,27 @@ void GameLayer::buildSpritePipeline() {
     uniform sampler2D uTex;
     uniform vec4 uColor;
 
+    // Optional: SDF font rendering (TextRenderer2D toggles these via Material)
+    uniform int uIsSDF;
+    uniform float uSDFSoftness;
+
     void main() {
         vec4 tex = texture(uTex, vUV);
-        FragColor = tex * uColor;
+
+        // Normal sprite path
+        if (uIsSDF == 0) {
+            FragColor = tex * uColor;
+            return;
+        }
+
+        // SDF path: distance is stored in alpha (0..1), edge is at 0.5
+        float dist = tex.a;
+        float w = fwidth(dist) * max(uSDFSoftness, 0.001);
+        float alpha = smoothstep(0.5 - w, 0.5 + w, dist);
+        FragColor = vec4(uColor.rgb, uColor.a * alpha);
     }
 )";
+
 
 
     m_spriteShader = resources.getOrCreateShader("sprite", spriteVs, spriteFs);
@@ -163,7 +179,13 @@ void GameLayer::buildSpritePipeline() {
         return;
     }
     // Example font load (put a .ttf in your sandbox assets folder)
-    if (!m_text.loadFont(m_app->resources(), "ui", "assets/fonts/BoldPixels.ttf", 16.0f)) {
+    if (!m_text.loadSDFont(m_app->resources(),
+        "ui",
+        "assets/fonts/BoldPixels.ttf",
+        16.0f,   // bake size (bigger = better at huge scaling)
+        1024, 1024,
+        12       // padding (bigger = safer for extreme scaling)
+    )) {
         LogError("FAILED to load font: assets/fonts/BoldPixels.ttf");
     }
     else {

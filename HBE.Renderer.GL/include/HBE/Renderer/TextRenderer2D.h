@@ -18,8 +18,8 @@ namespace HBE::Renderer {
     public:
 
         enum class TextAlignH { Left, Center, Right };
-        enum class TextAlignV {Baseline, Top, Middle, Bottom};
-        
+        enum class TextAlignV { Baseline, Top, Middle, Bottom };
+
         struct TextLayout {
             float width = 0.0f;
             float height = 0.0f;
@@ -27,32 +27,26 @@ namespace HBE::Renderer {
         };
 
         struct TextAnim {
-            // Time
-            float t = 0.0f;          // current time (seconds)
-            float duration = 1.0f;   // total duration for fade/out (optional)
+            float t = 0.0f;
+            float duration = 1.0f;
 
-            // Typewriter
             bool typewriter = false;
-            float charsPerSecond = 30.0f; // revealed glyphs per second
-            int maxChars = -1;            // clamp reveal (optional)
+            float charsPerSecond = 30.0f;
+            int maxChars = -1;
 
-            // Fade
             bool fadeIn = false;
-            float fadeInTime = 0.25f;     // seconds
+            float fadeInTime = 0.25f;
             bool fadeOut = false;
-            float fadeOutTime = 0.25f;    // seconds (at end of duration)
+            float fadeOutTime = 0.25f;
 
-            // Motion (screen/world units)
             float offsetX = 0.0f;
             float offsetY = 0.0f;
-            float velX = 0.0f;        // units/sec
-            float velY = 0.0f;        // units/sec
+            float velX = 0.0f;
+            float velY = 0.0f;
 
-            // Scale pop (optional)
             float startScale = 1.0f;
             float endScale = 1.0f;
 
-            // If true, animation ends after duration (useful for damage numbers)
             bool autoExpire = false;
         };
 
@@ -67,13 +61,8 @@ namespace HBE::Renderer {
             float lineSpacingMult,
             const TextAnim& anim);
 
-
-        // Measure without drawing.
-        // if maxWidth > 0, it wraps.
         TextLayout measureText(const std::string& text, float scale = 1.0f, float maxWidth = 0.0f) const;
 
-        // drawText with alignment and optional wrapping.
-        // x,y refer to an anchor point based on alignH/alignV
         void drawTextAligned(Renderer2D& r2d,
             float x, float y,
             const std::string& text,
@@ -86,7 +75,6 @@ namespace HBE::Renderer {
 
         bool initialize(ResourceCache& cache, GLShader* spriteShader, Mesh* quadMesh);
 
-        // Load a custom TTF/OTF and store it by name
         bool loadFont(ResourceCache& cache,
             const std::string& fontName,
             const std::string& ttfPath,
@@ -94,10 +82,17 @@ namespace HBE::Renderer {
             int atlasW = 512,
             int atlasH = 512);
 
+        // NEW: SDF font bake + load
+        bool loadSDFont(ResourceCache& cache,
+            const std::string& fontName,
+            const std::string& ttfPath,
+            float pixelHeight,
+            int atlasW = 1024,
+            int atlasH = 1024,
+            int padding = 8);
+
         void setActiveFont(const std::string& fontName);
 
-        // x,y are screen-space pixels (origin bottom-left).
-        // y is treated as the BASELINE for proportional fonts.
         void drawText(Renderer2D& r2d,
             float x, float y,
             const std::string& text,
@@ -105,7 +100,6 @@ namespace HBE::Renderer {
             Color4 tint = { 1,1,1,1 });
 
     private:
-        // Fallback debug atlas font (your original)
         Texture2D* m_debugFontTex = nullptr;
         int m_dbgTexW = 0, m_dbgTexH = 0;
         int m_dbgGlyphW = 8, m_dbgGlyphH = 8;
@@ -114,14 +108,12 @@ namespace HBE::Renderer {
         bool buildDebugAtlas(ResourceCache& cache);
         void dbgUvForChar(unsigned char c, float outUVRect[4]) const;
 
-        // low-level draw (NO alignment/wrap, NO recursion)
         void drawTextRaw(Renderer2D& r2d,
             float x, float y,
             const std::string& text,
             float scale,
             Color4 tint);
 
-        // Real fonts
         std::unordered_map<std::string, Font> m_fonts;
         Font* m_activeFont = nullptr;
 

@@ -1,3 +1,6 @@
+// NOTE: This is the exact file used in the working SDF patch.
+// Paste it as-is.
+
 #include "HBE/Renderer/TextRenderer2D.h"
 #include "HBE/Renderer/Renderer2D.h"
 #include "HBE/Renderer/ResourceCache.h"
@@ -23,17 +26,6 @@ namespace HBE::Renderer {
         return v;
     }
 
-    // Count “glyphs” in a string (ASCII-safe; ignores '\n' by default)
-    static int countGlyphsASCII(const std::string& s, bool includeNewlines) {
-        int n = 0;
-        for (char c : s) {
-            if (!includeNewlines && c == '\n') continue;
-            n++;
-        }
-        return n;
-    }
-
-    // Return first N glyphs of string (ASCII-safe), preserving newlines if they appear
     static std::string takeFirstGlyphsASCII(const std::string& s, int glyphCount) {
         if (glyphCount < 0) return s;
         std::string out;
@@ -43,13 +35,10 @@ namespace HBE::Renderer {
         for (char c : s) {
             if (n >= glyphCount) break;
             out.push_back(c);
-            // count everything except maybe you want to ignore '\n' for reveal;
-            // for now, count it so lines reveal naturally.
             n++;
         }
         return out;
     }
-
 
     static void putPixel(std::vector<unsigned char>& rgba, int w, int x, int y, unsigned char a) {
         int i = (y * w + x) * 4;
@@ -107,10 +96,30 @@ namespace HBE::Renderer {
         }
 
         auto ins = m_fonts.emplace(fontName, std::move(f));
-        // set active to the newly loaded font
         m_activeFont = &ins.first->second;
 
-        // use its texture in our material for drawing
+        m_mat.texture = m_activeFont->texture();
+        return true;
+    }
+
+    bool TextRenderer2D::loadSDFont(ResourceCache& cache,
+        const std::string& fontName,
+        const std::string& ttfPath,
+        float pixelHeight,
+        int atlasW,
+        int atlasH,
+        int padding)
+    {
+        Font f;
+        const std::string texName = "sdf_font_" + fontName + "_" + std::to_string((int)pixelHeight);
+
+        if (!f.loadFromTTF_SDF(cache, texName, ttfPath, pixelHeight, atlasW, atlasH, padding)) {
+            return false;
+        }
+
+        auto ins = m_fonts.emplace(fontName, std::move(f));
+        m_activeFont = &ins.first->second;
+
         m_mat.texture = m_activeFont->texture();
         return true;
     }
@@ -118,7 +127,6 @@ namespace HBE::Renderer {
     void TextRenderer2D::setActiveFont(const std::string& fontName) {
         auto it = m_fonts.find(fontName);
         if (it == m_fonts.end()) {
-            // fallback to debug font
             m_activeFont = nullptr;
             m_mat.texture = m_debugFontTex;
             return;
@@ -162,7 +170,6 @@ namespace HBE::Renderer {
         m_debugFontTex = cache.getOrCreateTextureFromRGBA("debug_font_atlas", m_dbgTexW, m_dbgTexH, rgba.data());
         if (!m_debugFontTex) return false;
 
-        // pixel font should stay crisp
         m_debugFontTex->setFiltering(false);
         return true;
     }
@@ -191,18 +198,11 @@ namespace HBE::Renderer {
         TextLayout out{};
         out.lineCount = 1;
 
-        // Use active font if available; otherwise debug font metrics.
         const bool useTTF = (m_activeFont && m_activeFont->texture());
 
-        float lineHeight = 0.0f;
-        if (useTTF) {
-            lineHeight = m_activeFont->pixelHeight() * scale;
-        }
-        else {
-            lineHeight = (float)m_dbgGlyphH * scale;
-        }
-
+        float lineHeight = useTTF ? (m_activeFont->lineHeight() * scale) : ((float)m_dbgGlyphH * scale);
         float lineSpacing = lineHeight * 1.25f;
+
         float curLineW = 0.0f;
         float maxLineW = 0.0f;
 
@@ -213,60 +213,41 @@ namespace HBE::Renderer {
             };
 
         if (!useTTF) {
-            // Debug font: fixed width characters
             const float gw = (float)m_dbgGlyphW * scale;
 
-            for (size_t i = 0; i < text.size(); ++i) {
-                char ch = text[i];
-
-                if (ch == '\n') {
-                    commitLine();
-                    continue;
-                }
-
-                // wrap
-                if (maxWidth > 0.0f && curLineW + gw > maxWidth && curLineW > 0.0f) {
-                    commitLine();
-                }
-
+            for (char ch : text) {
+                if (ch == '\n') { commitLine(); continue; }
+                if (maxWidth > 0.0f && curLineW + gw > maxWidth && curLineW > 0.0f) commitLine();
                 curLineW += gw;
             }
 
             if (curLineW > maxLineW) maxLineW = curLineW;
-
             out.width = maxLineW;
             out.height = (out.lineCount * lineSpacing);
             return out;
         }
 
-        // TTF font: use buildQuad to advance pen
         float penX = 0.0f;
         float penY = 0.0f;
-
         float lineStartPenX = penX;
 
-        // Wrapping strategy: word-wrap by measuring word widths.
         size_t i = 0;
         while (i < text.size()) {
             char ch = text[i];
 
             if (ch == '\n') {
-                // commit current line
                 curLineW = (penX - lineStartPenX) * scale;
                 if (curLineW > maxLineW) maxLineW = curLineW;
 
-                // new line
                 out.lineCount++;
                 penX = 0.0f;
-                penY += m_activeFont->pixelHeight(); // advance baseline down in stb-space
+                penY += m_activeFont->lineHeight();
                 lineStartPenX = penX;
                 i++;
                 continue;
             }
 
-            // If wrapping enabled, measure next "word" width.
-            if (maxWidth > 0.0f && isWhitespace(ch) == false) {
-                // Measure word width without committing
+            if (maxWidth > 0.0f && !isWhitespace(ch)) {
                 float testPenX = penX;
                 float testPenY = penY;
 
@@ -289,18 +270,15 @@ namespace HBE::Renderer {
                 float currentW = (penX - lineStartPenX) * scale;
 
                 if (currentW > 0.0f && currentW + wordW > maxWidth) {
-                    // commit line and wrap before the word
                     if (currentW > maxLineW) maxLineW = currentW;
-
                     out.lineCount++;
                     penX = 0.0f;
-                    penY += m_activeFont->pixelHeight();
+                    penY += m_activeFont->lineHeight();
                     lineStartPenX = penX;
-                    continue; // retry this word on new line (don’t advance i)
+                    continue;
                 }
             }
 
-            // Advance by this character
             float x0, y0, x1, y1, u0, v0, u1, v1;
             float px = penX;
             float py = penY;
@@ -316,7 +294,6 @@ namespace HBE::Renderer {
             i++;
         }
 
-        // last line
         curLineW = (penX - lineStartPenX) * scale;
         if (curLineW > maxLineW) maxLineW = curLineW;
 
@@ -336,7 +313,6 @@ namespace HBE::Renderer {
         float lineSpacingMult,
         const TextAnim& anim)
     {
-        // 1) Compute animated alpha
         float alpha = 1.0f;
 
         if (anim.fadeIn && anim.fadeInTime > 0.0f) {
@@ -354,18 +330,15 @@ namespace HBE::Renderer {
         Color4 tint = baseTint;
         tint.a *= alpha;
 
-        // 2) Compute animated scale (linear; can add easing later)
         float scale = baseScale;
         if (anim.startScale != anim.endScale && anim.duration > 0.0f) {
             float u = clamp01(anim.t / anim.duration);
             scale = baseScale * (anim.startScale + (anim.endScale - anim.startScale) * u);
         }
 
-        // 3) Compute animated position offset
         float ax = x + anim.offsetX + anim.velX * anim.t;
         float ay = y + anim.offsetY + anim.velY * anim.t;
 
-        // 4) Typewriter reveal
         std::string drawStr = text;
         if (anim.typewriter) {
             int maxGlyphs = (int)std::floor(anim.t * anim.charsPerSecond);
@@ -373,16 +346,7 @@ namespace HBE::Renderer {
             drawStr = takeFirstGlyphsASCII(text, maxGlyphs);
         }
 
-        // 5) Draw using your alignment+wrap pipeline
-        drawTextAligned(r2d,
-            ax, ay,
-            drawStr,
-            scale,
-            tint,
-            alignH,
-            alignV,
-            maxWidth,
-            lineSpacingMult);
+        drawTextAligned(r2d, ax, ay, drawStr, scale, tint, alignH, alignV, maxWidth, lineSpacingMult);
     }
 
     void TextRenderer2D::drawText(Renderer2D& r2d,
@@ -391,11 +355,8 @@ namespace HBE::Renderer {
         float scale,
         Color4 tint)
     {
-        drawTextAligned(r2d, x, y, text, scale, tint,
-            TextAlignH::Left, TextAlignV::Baseline,
-            0.0f, 1.25f);
+        drawTextAligned(r2d, x, y, text, scale, tint, TextAlignH::Left, TextAlignV::Baseline, 0.0f, 1.25f);
     }
-
 
     void TextRenderer2D::drawTextAligned(Renderer2D& r2d,
         float x, float y,
@@ -409,37 +370,28 @@ namespace HBE::Renderer {
     {
         if (!m_quad) return;
 
-        // Measure block first (for alignment)
         TextLayout layout = measureText(text, scale, maxWidth);
 
         float startX = x;
         float startY = y;
 
-        // Horizontal alignment shifts X by width
         if (alignH == TextAlignH::Center) startX -= layout.width * 0.5f;
         else if (alignH == TextAlignH::Right) startX -= layout.width;
 
-        // Vertical alignment shifts Y by height
         if (alignV == TextAlignV::Top) startY += layout.height;
         else if (alignV == TextAlignV::Middle) startY += layout.height * 0.5f;
         else if (alignV == TextAlignV::Bottom) startY += 0.0f;
-        // Baseline: leave as-is
 
-        // Now draw line by line using your existing drawText logic:
-        // We’ll split into lines with wrapping if needed, and call drawText for each line.
         const bool useTTF = (m_activeFont && m_activeFont->texture());
-
-        float lineHeight = useTTF ? (m_activeFont->pixelHeight() * scale) : ((float)m_dbgGlyphH * scale);
+        float lineHeight = useTTF ? (m_activeFont->lineHeight() * scale) : ((float)m_dbgGlyphH * scale);
         float lineSpacing = lineHeight * lineSpacingMult;
 
-        // Build wrapped lines
         std::vector<std::string> lines;
         lines.reserve(8);
 
         auto pushLine = [&](const std::string& s) { lines.push_back(s); };
 
         if (maxWidth <= 0.0f) {
-            // Just split on '\n'
             std::string cur;
             for (char ch : text) {
                 if (ch == '\n') { pushLine(cur); cur.clear(); }
@@ -448,7 +400,6 @@ namespace HBE::Renderer {
             pushLine(cur);
         }
         else {
-            // Word wrap
             std::string cur;
             std::string word;
 
@@ -472,9 +423,7 @@ namespace HBE::Renderer {
                 word.clear();
                 };
 
-            for (size_t i = 0; i < text.size(); ++i) {
-                char ch = text[i];
-
+            for (char ch : text) {
                 if (ch == '\n') {
                     flushWord();
                     pushLine(cur);
@@ -482,34 +431,24 @@ namespace HBE::Renderer {
                     continue;
                 }
 
-                if (isWhitespace(ch)) {
-                    flushWord();
-                }
-                else {
-                    word.push_back(ch);
-                }
+                if (isWhitespace(ch)) flushWord();
+                else word.push_back(ch);
             }
 
             flushWord();
             pushLine(cur);
         }
 
-        // Draw each line with per-line horizontal alignment inside the block
         float lineY = startY;
-        for (size_t i = 0; i < lines.size(); ++i) {
-            const std::string& line = lines[i];
-
-            // measure line width for per-line alignment inside maxWidth
+        for (const auto& line : lines) {
             float lineW = measureText(line, scale, 0.0f).width;
 
             float lineX = startX;
             if (alignH == TextAlignH::Center) lineX = startX + (layout.width - lineW) * 0.5f;
             else if (alignH == TextAlignH::Right) lineX = startX + (layout.width - lineW);
 
-            // Use your existing drawText (baseline at lineY)
             drawTextRaw(r2d, lineX, lineY, line, scale, tint);
-
-            lineY -= lineSpacing; // next line down
+            lineY -= lineSpacing;
         }
     }
 
@@ -528,16 +467,18 @@ namespace HBE::Renderer {
 
         m_mat.color = tint;
 
+        // SDF toggle:
+        m_mat.useSDF = (m_activeFont && m_activeFont->isSDF());
+        m_mat.sdfSoftness = 1.0f;
+
         float penX = x;
         float penY = y; // baseline
 
-        // ----- TTF path -----
         if (m_activeFont && m_activeFont->texture()) {
             for (char ch : text) {
                 if (ch == '\n') {
-                    // newline: move down one line (you can tune this later)
                     penX = x;
-                    penY -= (m_activeFont->pixelHeight() * 1.25f) * scale;
+                    penY -= (m_activeFont->lineHeight()) * scale;
                     continue;
                 }
 
@@ -555,11 +496,10 @@ namespace HBE::Renderer {
                     continue;
                 }
 
-                // advance pen for NEXT glyph
                 penX = oldPenX + (px - oldPenX) * scale;
                 penY = oldPenY + (py - oldPenY) * scale;
 
-                // flip Y around baseline (your engine is Y-up)
+                // engine is Y-up, stb is Y-down
                 float sx0 = x + (x0 - x) * scale;
                 float sx1 = x + (x1 - x) * scale;
                 float sy0 = y - (y0 - y) * scale;
@@ -584,7 +524,6 @@ namespace HBE::Renderer {
             return;
         }
 
-        // ----- Debug bitmap fallback (fixed 8x8) -----
         const float gw = (float)m_dbgGlyphW * scale;
         const float gh = (float)m_dbgGlyphH * scale;
 
@@ -611,7 +550,5 @@ namespace HBE::Renderer {
             penX += gw;
         }
     }
-
-
 
 } // namespace HBE::Renderer

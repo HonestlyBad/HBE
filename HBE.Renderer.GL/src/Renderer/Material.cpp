@@ -19,6 +19,17 @@ namespace HBE::Renderer {
             glUniform4f(colorLoc, color.r, color.g, color.b, color.a);
         }
 
+        // Optional SDF uniforms (if present)
+        int isSdfLoc = shader->getUniformLocation("uIsSDF");
+        if (isSdfLoc >= 0) {
+            glUniform1i(isSdfLoc, useSDF ? 1 : 0);
+        }
+
+        int sdfSoftLoc = shader->getUniformLocation("uSDFSoftness");
+        if (sdfSoftLoc >= 0) {
+            glUniform1f(sdfSoftLoc, sdfSoftness);
+        }
+
         // Texture + sampler (unit 0)
         if (texture) {
             glActiveTexture(GL_TEXTURE0);
