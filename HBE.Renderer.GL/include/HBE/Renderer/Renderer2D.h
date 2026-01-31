@@ -2,6 +2,7 @@
 
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Camera2D.h"
+#include <memory>
 
 namespace HBE::Renderer {
 	class GLRenderer;
@@ -12,6 +13,14 @@ namespace HBE::Renderer {
 	class Renderer2D {
 	public:
 		explicit Renderer2D(GLRenderer& backend);
+		~Renderer2D();
+
+		struct Renderer2DStats {
+			int drawCalls = 0;
+			int quads = 0;
+		};
+
+		Renderer2DStats getStats() const;
 
 		// Tell the renderer which mesh is the standard sprite quad ( quad_pos_uv).
 		// only draws using this mesh will be batched
@@ -33,7 +42,7 @@ namespace HBE::Renderer {
 		const Mesh* m_spriteQuadMesh = nullptr;
 
 		// batching
-		SpriteBatch2D* m_batch = nullptr; // lazy-owned (created on first use)
+		std::unique_ptr<SpriteBatch2D> m_batch;
 		void ensureBatch();
 	};
 }

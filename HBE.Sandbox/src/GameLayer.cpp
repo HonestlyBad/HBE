@@ -368,7 +368,7 @@ void GameLayer::onRender() {
             tr->posX, tr->posY + 40.0f,
             "-25",
             1.0f,
-            { 1,0.2f,0.2f,1 },
+            { 255,0.0f,0.0f,1 },
             TextRenderer2D::TextAlignH::Center,
             TextRenderer2D::TextAlignV::Baseline,
             0.0f,

@@ -7,10 +7,11 @@
 namespace HBE::Renderer {
 
 	Renderer2D::Renderer2D(GLRenderer& backend) : m_backend(backend) {}
+	Renderer2D::~Renderer2D() = default;
 
 	void Renderer2D::ensureBatch() {
 		if (!m_batch) {
-			m_batch = new SpriteBatch2D();
+			m_batch = std::make_unique<SpriteBatch2D>();
 			m_batch->setQuadMesh(m_spriteQuadMesh);
 		}
 	}
@@ -49,5 +50,14 @@ namespace HBE::Renderer {
 		}
 		// Fallback for everything else (debug draw meshes, etc.)
 		m_backend.draw(item);
+	}
+
+	Renderer2D::Renderer2DStats Renderer2D::getStats() const {
+		Renderer2DStats s{};
+		if (m_batch) {
+			s.drawCalls = m_batch->drawCalls();
+			s.quads = m_batch->quadCount();
+		}
+		return s;
 	}
 }
