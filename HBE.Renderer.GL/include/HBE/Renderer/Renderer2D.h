@@ -5,11 +5,17 @@
 
 namespace HBE::Renderer {
 	class GLRenderer;
+	class Mesh;
+	class SpriteBatch2D;
 
 	// high-level 2D renderer that wraps a specific backend (currently GLRender)
 	class Renderer2D {
 	public:
 		explicit Renderer2D(GLRenderer& backend);
+
+		// Tell the renderer which mesh is the standard sprite quad ( quad_pos_uv).
+		// only draws using this mesh will be batched
+		void setSpriteQuadMesh(const Mesh* quadMesh);
 
 		// set up the camera for this scene
 		void beginScene(const Camera2D& camera);
@@ -23,5 +29,11 @@ namespace HBE::Renderer {
 	private:
 		GLRenderer& m_backend;
 		const Camera2D* m_activeCamera = nullptr;
+
+		const Mesh* m_spriteQuadMesh = nullptr;
+
+		// batching
+		SpriteBatch2D* m_batch = nullptr; // lazy-owned (created on first use)
+		void ensureBatch();
 	};
 }

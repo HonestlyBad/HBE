@@ -247,5 +247,15 @@ namespace HBE::Renderer {
         glDisable(GL_SCISSOR_TEST);
     }
 
+    void GLRenderer::getViewProjection(float out16[16]) const {
+        float view[16];
+        float proj[16];
+        buildViewMatrix(view);
+        buildOrthoProjection(proj);
+
+        // out = proj * view
+        multiplyMat4(proj, view, out16);
+    }
+
 
 } // namespace HBE::Renderer

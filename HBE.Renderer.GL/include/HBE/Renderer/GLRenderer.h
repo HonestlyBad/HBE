@@ -49,6 +49,9 @@ namespace HBE::Renderer {
         // begin rendering inside the letterboxed viewport rect
         void beginFrameInViewport(int vpX, int vpY, int vpW, int vpH);
 
+        // build the camera view-projection matric (proj * view)
+        void getViewProjection(float out16[16]) const;
+
 
     private:
         bool m_initialized = false;

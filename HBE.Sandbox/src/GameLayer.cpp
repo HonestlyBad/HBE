@@ -161,6 +161,7 @@ void GameLayer::buildSpritePipeline() {
     };
 
     m_quadMesh = resources.getOrCreateMeshPosUV("quad_pos_uv", quadVerts, 6);
+    m_app->renderer2D().setSpriteQuadMesh(m_quadMesh);
     if (!m_quadMesh) {
         LogFatal("GameLayer: Failed to create quad mesh");
         m_app->requestQuit();
