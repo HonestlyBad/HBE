@@ -15,6 +15,8 @@ namespace HBE::Renderer {
 		explicit Renderer2D(GLRenderer& backend);
 		~Renderer2D();
 
+		const Camera2D* activeCamera() const { return m_activeCamera; }
+
 		struct Renderer2DStats {
 			int drawCalls = 0;
 			int quads = 0;

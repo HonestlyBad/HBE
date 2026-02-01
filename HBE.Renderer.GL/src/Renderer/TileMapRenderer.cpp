@@ -77,10 +77,32 @@ namespace HBE::Renderer {
         // Use integer pixel-aligned tile sizes to avoid subpixel seams.
         const float tw = std::round(map.worldTileW());
         const float th = std::round(map.worldTileH());
+        if (tw <= 0.0f || th <= 0.0f) return;
+
+        // camera culling
+        int camMinX = 0, camMaxX = 0, camMinY = 0, camMaxY = 0;
+        bool hasCam = false;
+
+        if (const Camera2D* cam = r2d.activeCamera()) {
+            const float halfW = 0.5f * cam->viewportWidth / std::max(cam->zoom, 0.0001f);
+            const float halfH = 0.5f * cam->viewportHeight / std::max(cam->zoom, 0.0001f);
+
+            // pad by 1 tile so edges don't pop
+            const float left = cam->x - halfW - tw;
+            const float right = cam->x + halfW + tw;
+            const float bottom = cam->y - halfH - th;
+            const float top = cam->y + halfH + th;
+
+            camMinX = (int)std::floor(left / tw);
+            camMaxX = (int)std::floor(right / tw);
+            camMinY = (int)std::floor(bottom / th);
+            camMaxY = (int)std::floor(top / th);
+
+            hasCam = true;
+        }
 
         for (const auto& layer : map.layers) {
-            if (layer.tilesetIndex < 0 || layer.tilesetIndex >= (int)m_tilesets.size())
-                continue;
+            if (layer.tilesetIndex < 0 || layer.tilesetIndex >= (int)m_tilesets.size()) continue;
 
             auto& ts = m_tilesets[layer.tilesetIndex];
             item.material = &ts.material;
@@ -89,11 +111,22 @@ namespace HBE::Renderer {
             item.transform.scaleY = th;
             item.transform.rotation = 0.0f;
 
-            for (int y = 0; y < layer.h; ++y) {
-                for (int x = 0; x < layer.w; ++x) {
-                    const int tileId = layer.at(x, y);
+            // Compute culled tile bounds per-layer (clamped)
+            int x0 = 0, x1 = layer.w - 1;
+            int y0 = 0, y1 = layer.h - 1;
 
-                    // 0 = empty
+            if (hasCam) {
+                x0 = std::max(0, camMinX);
+                y0 = std::max(0, camMinY);
+                x1 = std::min(layer.w - 1, camMaxX);
+                y1 = std::min(layer.h - 1, camMaxY);
+            }
+
+            if (x0 > x1 || y0 > y1) continue;
+
+            for (int y = y0; y <= y1; ++y) {
+                for (int x = x0; x <= x1; ++x) {
+                    const int tileId = layer.at(x, y);
                     if (tileId == 0) continue;
 
                     // map tile ids are 1-based, atlas is 0-based
@@ -101,7 +134,7 @@ namespace HBE::Renderer {
 
                     computeTileUV(ts, atlasIndex, item.uvRect);
 
-                    // Pixel-snap positions (critical when camera moves / floats).
+                    // Pixel-snap positions
                     float px = (float)x * tw + tw * 0.5f;
                     float py = (float)y * th + th * 0.5f;
 
