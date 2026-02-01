@@ -465,6 +465,8 @@ namespace HBE::Renderer {
         item.material = &m_mat;
         item.transform.rotation = 0.0f;
 
+        item.layer = 5000;
+
         m_mat.color = tint;
 
         // SDF toggle:

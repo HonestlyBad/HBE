@@ -61,6 +61,8 @@ namespace HBE::Renderer {
         item.mesh = m_quadMesh;
         item.material = &m_mat;
 
+        item.layer = 9000; // always above world sprites
+
         item.transform.posX = cx;
         item.transform.posY = cy;
         item.transform.scaleX = w;

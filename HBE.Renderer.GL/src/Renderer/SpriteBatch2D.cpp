@@ -18,6 +18,7 @@ namespace HBE::Renderer {
 	void SpriteBatch2D::begin() {
 		m_drawCalls = 0;
 		m_quadsSubmitted = 0;
+		m_orderCounter = 0;
 		m_quads.clear();
 	}
 
@@ -32,6 +33,9 @@ namespace HBE::Renderer {
 
 		Quad q{};
 		q.material = item.material;
+		q.layer = item.layer;
+		q.sortKey = item.sortKey;
+		q.order = m_orderCounter++;
 		emitQuadVertices(item, q.v);
 
 		m_quads.push_back(q);
@@ -90,6 +94,7 @@ namespace HBE::Renderer {
 
 			currentMat = q.material;
 		}
+		std::sort(m_quads.begin(), m_quads.end(), quadLess);
 		flushCurrent();
 	}
 
@@ -229,5 +234,12 @@ namespace HBE::Renderer {
 			out30[o++] = fuv.u;
 			out30[o++] = fuv.v;
 		}
+	}
+
+	bool SpriteBatch2D::quadLess(const Quad& a, const Quad& b) {
+		if (a.layer != b.layer) return a.layer < b.layer;
+		if (a.material != b.material) return a.material < b.material;
+		if (a.sortKey != b.sortKey) return a.sortKey < b.sortKey;
+		return a.order < b.order; // keep deterministic order within same key
 	}
 }

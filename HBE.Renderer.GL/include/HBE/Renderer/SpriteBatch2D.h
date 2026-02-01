@@ -32,8 +32,15 @@ namespace HBE::Renderer {
 	private:
 		struct Quad {
 			const Material* material = nullptr;
+			int layer = 0;
+			float sortKey = 0.0f;
+			uint32_t order = 0;
 			float v[6 * 5]; // 6 verts * (x, y, z, u, v)
 		};
+
+		uint32_t m_orderCounter = 0;
+		
+		static bool quadLess(const Quad& a, const Quad& b);
 
 		const Mesh* m_quadMesh = nullptr;
 

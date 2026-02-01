@@ -219,6 +219,8 @@ void GameLayer::buildSpritePipeline() {
     goblin.transform.posY = 0.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
+    goblin.layer = 100; // entites above tiles
+    goblin.sortKey = goblin.transform.posY; // optional for y-sorting
 
     SpriteRenderer2D::setFrame(goblin, m_goblinSheet, 0, 0);
 
@@ -243,8 +245,17 @@ void GameLayer::buildSpritePipeline() {
     GoblinWalk.frameDuration = 0.10f;
     GoblinWalk.loop = true;
 
+    //SpriteAnimationDesc GoblinAttack{};
+    //GoblinAttack.name = "Attack";
+    //GoblinAttack.row = 2;
+    //GoblinAttack.startCol = 0;
+    //GoblinAttack.frameCount = 6;
+    //GoblinAttack.frameDuration = 0.05f;
+    //GoblinAttack.loop = true;
+
     m_goblinAnimator.addClip(GoblinIdle);
     m_goblinAnimator.addClip(GoblinWalk);
+    //m_goblinAnimator.addClip(GoblinAttack);
     m_goblinAnimator.play("Idle", true);
 }
 

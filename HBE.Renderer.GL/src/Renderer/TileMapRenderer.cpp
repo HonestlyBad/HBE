@@ -72,6 +72,7 @@ namespace HBE::Renderer {
         if (!m_quadMesh || m_tilesets.empty()) return;
 
         RenderItem item{};
+        item.layer = 0;
         item.mesh = m_quadMesh;
 
         // Use integer pixel-aligned tile sizes to avoid subpixel seams.
