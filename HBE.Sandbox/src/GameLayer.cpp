@@ -200,9 +200,15 @@ void GameLayer::buildSpritePipeline() {
     desc.frameHeight = 100;
 
     m_goblinSheet = SpriteRenderer2D::declareSpriteSheet(resources, "orc_sheet", "assets/Orc.png", desc);
+    m_soldierSheet = SpriteRenderer2D::declareSpriteSheet(resources, "soldier_sheet", "assets/Soldier.png", desc);
 
     if (!m_goblinSheet.texture) {
         LogFatal("GameLayer: failed to load assets/Orc.png");
+        m_app->requestQuit();
+        return;
+    }
+    if (!m_soldierSheet.texture) {
+        LogFatal("GameLayer: failed to load assets/Soldier.png");
         m_app->requestQuit();
         return;
     }
@@ -210,21 +216,35 @@ void GameLayer::buildSpritePipeline() {
     // material
     m_goblinMaterial.shader = m_spriteShader;
     m_goblinMaterial.texture = m_goblinSheet.texture;
+    m_soldierMaterial.shader = m_spriteShader;
+    m_soldierMaterial.texture = m_soldierSheet.texture;
 
     // entity
     RenderItem goblin{};
     goblin.mesh = m_quadMesh;
     goblin.material = &m_goblinMaterial;
-    goblin.transform.posX = 0.0f;
-    goblin.transform.posY = 0.0f;
+    goblin.transform.posX = 1080.0f;
+    goblin.transform.posY = 95.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
     goblin.layer = 100; // entites above tiles
     goblin.sortKey = goblin.transform.posY; // optional for y-sorting
 
+    RenderItem soldier{};
+    soldier.mesh = m_quadMesh;
+    soldier.material = &m_soldierMaterial;
+    soldier.transform.posX = 64.0f;
+    soldier.transform.posY = 95.0f;
+    soldier.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
+    soldier.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
+    soldier.layer = 100;
+    soldier.sortKey = soldier.transform.posY;
+
     SpriteRenderer2D::setFrame(goblin, m_goblinSheet, 0, 0);
+    SpriteRenderer2D::setFrame(soldier, m_soldierSheet, 0, 0);
 
     m_goblinEntity = m_scene.createEntity(goblin);
+    m_soldierEntity = m_scene.createEntity(soldier);
 
     // animator
     m_goblinAnimator.sheet = &m_goblinSheet;
@@ -234,7 +254,7 @@ void GameLayer::buildSpritePipeline() {
     GoblinIdle.row = 0;
     GoblinIdle.startCol = 0;
     GoblinIdle.frameCount = 6;
-    GoblinIdle.frameDuration = 0.15f;
+    GoblinIdle.frameDuration = 0.10f;
     GoblinIdle.loop = true;
 
     SpriteAnimationDesc GoblinWalk{};
@@ -245,18 +265,30 @@ void GameLayer::buildSpritePipeline() {
     GoblinWalk.frameDuration = 0.10f;
     GoblinWalk.loop = true;
 
-    //SpriteAnimationDesc GoblinAttack{};
-    //GoblinAttack.name = "Attack";
-    //GoblinAttack.row = 2;
-    //GoblinAttack.startCol = 0;
-    //GoblinAttack.frameCount = 6;
-    //GoblinAttack.frameDuration = 0.05f;
-    //GoblinAttack.loop = true;
-
     m_goblinAnimator.addClip(GoblinIdle);
     m_goblinAnimator.addClip(GoblinWalk);
-    //m_goblinAnimator.addClip(GoblinAttack);
     m_goblinAnimator.play("Idle", true);
+
+    m_soldierAnimator.sheet = &m_soldierSheet;
+    SpriteAnimationDesc SoldierIdle{};
+    SoldierIdle.name = "Idle";
+    SoldierIdle.row = 0;
+    SoldierIdle.startCol = 0;
+    SoldierIdle.frameCount = 6;
+    SoldierIdle.frameDuration = 0.10f;
+    SoldierIdle.loop = true;
+
+    SpriteAnimationDesc SoldierWalk{};
+    SoldierWalk.name = "Walk";
+    SoldierWalk.row = 1;
+    SoldierWalk.startCol = 0;
+    SoldierWalk.frameCount = 8;
+    SoldierWalk.frameDuration = 0.10f;
+    SoldierWalk.loop = true;
+
+    m_soldierAnimator.addClip(SoldierIdle);
+    m_soldierAnimator.addClip(SoldierWalk);
+    m_soldierAnimator.play("Idle", true);
 }
 
 void GameLayer::onUpdate(float dt) {
@@ -284,8 +316,9 @@ void GameLayer::onUpdate(float dt) {
     }
 
 
-    Transform2D* tr = m_scene.getTransform(m_goblinEntity);
-    if (!tr) return;
+    Transform2D* tr = m_scene.getTransform(m_soldierEntity);
+    Transform2D* trg = m_scene.getTransform(m_goblinEntity);
+    if (!tr || !trg) return;
 
     bool Up = Input::IsKeyDown(SDL_SCANCODE_W) || Input::IsKeyDown(SDL_SCANCODE_UP);
     bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
@@ -324,13 +357,24 @@ void GameLayer::onUpdate(float dt) {
 
     // animation logic
     bool isMoving = (moveX != 0.0f || moveY != 0.0f);
-    if (isMoving) m_goblinAnimator.play("Walk");
+    if (isMoving) m_soldierAnimator.play("Walk");
+    else m_soldierAnimator.play("Idle");
+
+    m_soldierAnimator.update(dt);
+    if (RenderItem* item = m_scene.getRenderItem(m_soldierEntity)) {
+        m_soldierAnimator.apply(*item);
+    }
+    
+    bool isGMoving = false;
+    if (isGMoving) m_goblinAnimator.play("Walk");
     else m_goblinAnimator.play("Idle");
 
+
     m_goblinAnimator.update(dt);
-    if (RenderItem* item = m_scene.getRenderItem(m_goblinEntity)) {
-        m_goblinAnimator.apply(*item);
+    if (RenderItem* gItem = m_scene.getRenderItem(m_goblinEntity)) {
+        m_goblinAnimator.apply(*gItem);
     }
+
 
     // camera follow
     m_camera.x = tr->posX;
