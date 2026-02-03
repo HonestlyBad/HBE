@@ -20,6 +20,32 @@ namespace HBE::Renderer {
         return c == ' ' || c == '\t';
     }
 
+    static bool aabbOverlapsCamera(const Camera2D* cam,
+        float left, float right, float bottom, float top,
+        float inset)
+    {
+        if (!cam) return true;
+
+        const float zoom = (cam->zoom > 0.0001f) ? cam->zoom : 0.0001f;
+        const float halfW = 0.5f * cam->viewportWidth / zoom;
+        const float halfH = 0.5f * cam->viewportHeight / zoom;
+
+        float viewL = cam->x - halfW + inset;
+        float viewR = cam->x + halfW - inset;
+        float viewB = cam->y - halfH + inset;
+        float viewT = cam->y + halfH - inset;
+
+        // If inset is too large, the rect can invert—treat as "everything culled"
+        if (viewL > viewR || viewB > viewT) return false;
+
+        // no overlap => culled
+        if (right < viewL || left > viewR || top < viewB || bottom > viewT)
+            return false;
+
+        return true;
+    }
+
+
     static float clamp01(float v) {
         if (v < 0.0f) return 0.0f;
         if (v > 1.0f) return 1.0f;
@@ -382,6 +408,29 @@ namespace HBE::Renderer {
         else if (alignV == TextAlignV::Middle) startY += layout.height * 0.5f;
         else if (alignV == TextAlignV::Bottom) startY += 0.0f;
 
+        // ---- TEXT CULLING (whole block) ----
+        if (m_enableCulling) {
+            const Camera2D* cam = r2d.activeCamera();
+
+            // Approx bounds: text occupies [startX .. startX+width] and [startY-layout.height .. startY]
+            // (Your drawTextRaw uses Y as baseline, but layout.height already matches your line stepping.)
+            const float left = startX;
+            const float right = startX + layout.width;
+            const float top = startY;
+            const float bottom = startY - layout.height;
+
+            // small safety padding so glyph edges don’t pop
+            const float pad = 16.0f;
+
+            if (!aabbOverlapsCamera(cam,
+                left - pad, right + pad,
+                bottom - pad, top + pad,
+                m_cullInset))
+            {
+                return;
+            }
+        }
+
         const bool useTTF = (m_activeFont && m_activeFont->texture());
         float lineHeight = useTTF ? (m_activeFont->lineHeight() * scale) : ((float)m_dbgGlyphH * scale);
         float lineSpacing = lineHeight * lineSpacingMult;
@@ -459,6 +508,26 @@ namespace HBE::Renderer {
         Color4 tint)
     {
         if (!m_quad) return;
+        // ---- TEXT CULLING (single line / raw) ----
+        if (m_enableCulling) {
+            const Camera2D* cam = r2d.activeCamera();
+            TextLayout layout = measureText(text, scale, 0.0f);
+
+            const float left = x;
+            const float right = x + layout.width;
+            const float top = y;
+            const float bottom = y - layout.height;
+
+            const float pad = 16.0f;
+
+            if (!aabbOverlapsCamera(cam,
+                left - pad, right + pad,
+                bottom - pad, top + pad,
+                m_cullInset))
+            {
+                return;
+            }
+        }
 
         RenderItem item{};
         item.mesh = m_quad;

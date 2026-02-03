@@ -42,6 +42,7 @@ void GameLayer::onAttach(Application& app) {
 	m_camera.zoom = 1.0f;
 	m_camera.viewportWidth = LOGICAL_WIDTH;
 	m_camera.viewportHeight = LOGICAL_HEIGHT;
+    m_text.setCullInset(8.0f);
 
 	app.gl().setCamera(m_camera);
 	app.gl().setClearColor(0.1f, 0.2f, 0.35f, 1.0f);

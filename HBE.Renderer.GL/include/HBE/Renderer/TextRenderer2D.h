@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "HBE/Renderer/Camera2D.h"
 #include "HBE/Renderer/Material.h"
 #include "HBE/Renderer/Color.h"
 #include "HBE/Renderer/Font.h"
@@ -99,6 +100,14 @@ namespace HBE::Renderer {
             float scale = 1.0f,
             Color4 tint = { 1,1,1,1 });
 
+        // Text culling (world + UI pass based on active camera)
+        void setCullingEnabled(bool enabled) { m_enableCulling = enabled; }
+
+        // Positive inset shrinks the view rect (debug), negative expands it.
+        // Example: inset=200 => text must be 200 units inside the screen edges.
+        void setCullInset(float inset) { m_cullInset = inset; }
+
+
     private:
         Texture2D* m_debugFontTex = nullptr;
         int m_dbgTexW = 0, m_dbgTexH = 0;
@@ -106,6 +115,8 @@ namespace HBE::Renderer {
         int m_dbgCols = 16;
 
         bool buildDebugAtlas(ResourceCache& cache);
+        bool m_enableCulling = true;
+        float m_cullInset = 0.0f;
         void dbgUvForChar(unsigned char c, float outUVRect[4]) const;
 
         void drawTextRaw(Renderer2D& r2d,
