@@ -1,37 +1,43 @@
 # Honestly Bad Engine (HBE)
 
-**Honestly Bad Engine (HBE)** is a lightweight, modular **2D-first game engine**
-built completely from scratch in **C++**, using **SDL3** and **OpenGL**.
+**Honestly Bad Engine (HBE)** is a lightweight, modular **2D‑first game engine**
+built completely from scratch in **C++**, using **SDL3** and **OpenGL 3.3**.
 
 HBE is intentionally explicit and educational — the goal is not to hide systems
 behind magic, but to expose *real engine architecture* in a clean, readable way.
-It serves both as a learning project and as a solid foundation for small-to-medium
-games.
+It serves both as a learning project and as a solid foundation for small‑to‑medium
+2D games.
 
 ---
 
-## 🚀 Current Features
+## 🚀 Current Features (Updated)
 
 ### 🧠 Core Systems (`HBE.Core`)
 - Application runtime & main loop
 - Layer & LayerStack system (game states, overlays, UI layers)
 - Logging system (Trace → Fatal)
-- High-resolution timing & delta time
+- High‑resolution timing & delta time
 - Centralized ownership of platform, renderer, and resources
 
 ### 🖥 Platform Layer (`HBE.Platform.SDL`)
 - SDL3 window creation & lifecycle
 - OpenGL context creation
-- Windowed / borderless fullscreen switching
+- Windowed / borderless fullscreen
 - VSync control
 - Keyboard input system (pressed / released / held)
 - Event pumping & platform abstraction
 
 ### 🎨 Renderer (`HBE.Renderer` / `HBE.Renderer.GL`)
-- OpenGL 3.3 Core rendering backend
-- Renderer2D abstraction
-- Camera2D with logical resolution support
-- Mesh system (Pos+Color, Pos+UV)
+- OpenGL 3.3 Core backend
+- **Renderer2D abstraction**
+- **Real sprite batching system**
+  - CPU‑side quad collection
+  - Sorting by material (shader + texture)
+  - Dynamic VBO streaming
+  - Batched draw calls per frame
+- **Draw‑call statistics (draw calls / quads rendered)**
+- Camera2D with logical resolution
+- Mesh system (Pos+UV)
 - Texture2D loading (stb_image)
 - Material system (shader + texture + color)
 - Sprite rendering with UV rects
@@ -41,9 +47,19 @@ games.
 ### 🧩 Scene & Gameplay
 - Scene2D entity container
 - RenderItem + Transform2D model
+- Multiple animated entities (player + NPCs)
 - SpriteAnimator with named clips
 - Camera follow
-- Sandbox game layer example
+- Sandbox gameplay layer
+
+### ⚡ Performance Systems
+- **Entity / sprite culling**
+  - Camera‑based AABB culling in `Scene2D::render()`
+  - Off‑screen entities never reach the renderer or batch
+- **Text culling**
+  - World‑space and UI text is culled against the active camera
+  - Off‑screen text does not submit glyph quads
+- Designed to scale cleanly with large tilemaps and many sprites
 
 ---
 
@@ -87,6 +103,7 @@ Each module exports its own `include/` directory.
   - SDLPlatform
   - GLRenderer
   - Renderer2D
+  - SpriteBatch2D
   - ResourceCache
   - LayerStack
 
@@ -97,26 +114,6 @@ Each module exports its own `include/` directory.
 The main loop lives **entirely inside `Application`**.
 
 `main.cpp` is intentionally minimal.
-
----
-
-## 🧪 Sandbox Example
-
-```cpp
-Application app;
-app.initialize(windowCfg);
-
-app.pushLayer(std::make_unique<GameLayer>());
-app.run();
-```
-
-Each layer implements:
-
-```cpp
-void onAttach(Application&);
-void onUpdate(float dt);
-void onRender();
-```
 
 ---
 
@@ -142,13 +139,24 @@ idle.frameCount = 6;
 idle.frameDuration = 0.15f;
 idle.loop = true;
 
-Animator animator;
+SpriteAnimator animator;
 animator.sheet = &sheet;
 animator.addClip(idle);
 animator.play("Idle");
 ```
 
 Call `update(dt)` and `apply(renderItem)` each frame.
+
+---
+
+## 📊 Runtime Stats (Example)
+
+```text
+Batch DrawCalls: 2
+Quads Rendered:  1432
+```
+
+Useful for validating batching, culling, and performance behavior.
 
 ---
 
@@ -175,14 +183,14 @@ cmake --build .
 ## 🗺 Roadmap
 
 ### 2D Focus
-- Letterboxed logical viewport
+- Tilemap chunking
 - Sprite flipping & facing
-- Tilemaps
-- Physics-lite (AABB)
-- UI / debug overlay
+- Render layers & Y‑sorting
+- Physics‑lite (AABB)
 - Audio wrapper
+- Editor/debug tooling
 
-### Future 3D
+### Future 3D (Long‑term)
 - Camera3D
 - OBJ mesh loading
 - Basic lighting & materials
@@ -193,7 +201,7 @@ cmake --build .
 ## 🤝 Contributing
 
 Planned contribution areas:
-- Renderer improvements
+- Renderer optimizations
 - Animation & tooling
 - Scene & entity systems
 - Documentation & examples
