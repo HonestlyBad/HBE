@@ -2,6 +2,7 @@
 #include "HBE/Renderer/Renderer2D.h"
 #include "HBE/Core/Log.h"
 #include "HBE/Renderer/Material.h"
+#include <cmath>
 
 namespace HBE::Renderer {
 
@@ -54,19 +55,60 @@ namespace HBE::Renderer {
 	}
 
 	void Scene2D::render(Renderer2D& renderer) {
+		// If we have a camera, we can cull entities outside the view.
+		const Camera2D* cam = renderer.activeCamera();
+
+		// Camera view rect in world space
+		float viewL = -1e9f, viewR = 1e9f, viewB = -1e9f, viewT = 1e9f;
+		bool canCull = false;
+
+		if (cam) {
+			const float zoom = (cam->zoom > 0.0001f) ? cam->zoom : 0.0001f;
+			const float halfW = 0.5f * cam->viewportWidth / zoom;
+			const float halfH = 0.5f * cam->viewportHeight / zoom;
+
+			// Pad slightly so sprites don’t pop on edges if you have rounding/snapping
+			const float pad = 8.0f;
+
+			viewL = cam->x - halfW - pad;
+			viewR = cam->x + halfW + pad;
+			viewB = cam->y - halfH - pad;
+			viewT = cam->y + halfH + pad;
+
+			canCull = true;
+		}
+
 		for (auto& rec : m_entities) {
 			if (!rec.active) continue;
-
-			// old (now wrong):
-			// if (!rec.item.mesh || !rec.item.shader) { ... }
 
 			if (!rec.item.mesh || !rec.item.material || !rec.item.material->shader) {
 				LogError("Scene2D: render failed for an entity (missing mesh / material / shader)");
 				continue;
 			}
 
+			// ---- CULLING ----
+			if (canCull) {
+				// Treat transform.pos as center, scale as width/height (your quad mesh is centered)
+				const float cx = rec.item.transform.posX;
+				const float cy = rec.item.transform.posY;
+
+				const float hw = std::fabs(rec.item.transform.scaleX) * 0.5f;
+				const float hh = std::fabs(rec.item.transform.scaleY) * 0.5f;
+
+				const float aL = cx - hw;
+				const float aR = cx + hw;
+				const float aB = cy - hh;
+				const float aT = cy + hh;
+
+				// If AABB does NOT overlap the camera rect, skip it
+				if (aR < viewL || aL > viewR || aT < viewB || aB > viewT) {
+					continue;
+				}
+			}
+
 			renderer.draw(rec.item);
 		}
 	}
+
 
 }
