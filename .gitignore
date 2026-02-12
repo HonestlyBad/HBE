@@ -26,3 +26,4 @@ settings.VisualStudio.json
 /HBE.Sandbox/assets/maps
 /Chatgpt
 *.zip
+/.hbe_ai
