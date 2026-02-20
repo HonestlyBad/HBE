@@ -7,7 +7,7 @@
 namespace HBE::Renderer {
 
 	using HBE::Core::LogError;
-	
+
 	Scene2D::EntityRecord* Scene2D::findRecord(EntityID id) {
 		if (id == InvalidEntityID) return nullptr;
 		// simple index-based lookup: id = index + 1
@@ -47,10 +47,39 @@ namespace HBE::Renderer {
 		return rec ? &rec->item.transform : nullptr;
 	}
 
+	SpriteAnimationStateMachine* Scene2D::addSpriteAnimator(EntityID id, const SpriteRenderer2D::SpriteSheetHandle* sheet) {
+		EntityRecord* rec = findRecord(id);
+		if (!rec) return nullptr;
+
+		if (!rec->anim.has_value()) {
+			rec->anim.emplace();
+		}
+
+		rec->anim->sheet = sheet;
+		return &rec->anim.value();
+	}
+
+	SpriteAnimationStateMachine* Scene2D::getSpriteAnimator(EntityID id) {
+		EntityRecord* rec = findRecord(id);
+		if (!rec || !rec->anim.has_value()) return nullptr;
+		return &rec->anim.value();
+	}
+
 	void Scene2D::removeEntity(EntityID id) {
 		EntityRecord* rec = findRecord(id);
 		if (rec) {
 			rec->active = false;
+		}
+	}
+
+	void Scene2D::update(float dt, const SpriteAnimationStateMachine::EventCallback& onAnimEvent) {
+		for (auto& rec : m_entities) {
+			if (!rec.active) continue;
+
+			if (rec.anim.has_value()) {
+				rec.anim->update(dt, onAnimEvent);
+				rec.anim->apply(rec.item);
+			}
 		}
 	}
 
@@ -67,7 +96,7 @@ namespace HBE::Renderer {
 			const float halfW = 0.5f * cam->viewportWidth / zoom;
 			const float halfH = 0.5f * cam->viewportHeight / zoom;
 
-			// Pad slightly so sprites don’t pop on edges if you have rounding/snapping
+			// Pad slightly so sprites don't pop on edges if you have rounding/snapping
 			const float pad = 8.0f;
 
 			viewL = cam->x - halfW - pad;
@@ -109,6 +138,4 @@ namespace HBE::Renderer {
 			renderer.draw(rec.item);
 		}
 	}
-
-
 }

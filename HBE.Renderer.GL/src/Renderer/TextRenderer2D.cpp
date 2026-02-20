@@ -161,6 +161,14 @@ namespace HBE::Renderer {
         m_mat.texture = m_activeFont->texture();
     }
 
+    void TextRenderer2D::beginFrame(std::uint64_t frameIndex) {
+        if (!m_frameIndexValid || m_frameIndex != frameIndex) {
+            m_frameMaterials.clear();
+            m_frameIndex = frameIndex;
+            m_frameIndexValid = true;
+        }
+    }
+
     bool TextRenderer2D::buildDebugAtlas(ResourceCache& cache) {
         m_dbgGlyphW = 8; m_dbgGlyphH = 8;
         m_dbgCols = 16;
@@ -531,16 +539,21 @@ namespace HBE::Renderer {
 
         RenderItem item{};
         item.mesh = m_quad;
-        item.material = &m_mat;
         item.transform.rotation = 0.0f;
-
         item.layer = 5000;
 
-        m_mat.color = tint;
+        // IMPORTANT: RenderItems are queued and rendered later. If they all point at the same Material
+        // instance (m_mat), then changing m_mat.color for a new string will retroactively affect all queued text.
+        // Fix: make a per-draw Material copy and point the RenderItem at that stable copy for this frame.
+        Material matCopy = m_mat;
+        matCopy.color = tint;
 
         // SDF toggle:
-        m_mat.useSDF = (m_activeFont && m_activeFont->isSDF());
-        m_mat.sdfSoftness = 1.0f;
+        matCopy.useSDF = (m_activeFont && m_activeFont->isSDF());
+        matCopy.sdfSoftness = 1.0f;
+
+        m_frameMaterials.push_back(matCopy);
+        item.material = &m_frameMaterials.back();
 
         float penX = x;
         float penY = y; // baseline
