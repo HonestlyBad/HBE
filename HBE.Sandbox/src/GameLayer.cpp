@@ -17,15 +17,18 @@
 #include <cmath>
 #include <vector>
 #include <string>
+#include <algorithm> // remove_if
+#include <utility>   // move
 
 using namespace HBE::Core;
 using namespace HBE::Renderer;
 using namespace HBE::Platform;
 
 namespace {
-	constexpr float SPRITE_PIXEL_SCALE = 4.0f;
+    constexpr float SPRITE_PIXEL_SCALE = 4.0f;
+
     // --- COLLIDER SIZE IN PIXELS (tweak these) ---
-// This is NOT the frame size (100x100). This is the goblin's "body" size.
+    // This is NOT the frame size (100x100). This is the player's "body" size.
     constexpr float PLAYER_BODY_W_PX = 8.0f;
     constexpr float PLAYER_BODY_H_PX = 14.0f;
 
@@ -34,20 +37,20 @@ namespace {
 }
 
 void GameLayer::onAttach(Application& app) {
-	m_app = &app;
+    m_app = &app;
 
-	// camera setup (logical resolution)
+    // camera setup (logical resolution)
     m_camera.x = std::round(m_camera.x);
     m_camera.y = std::round(m_camera.y);
-	m_camera.zoom = 1.0f;
-	m_camera.viewportWidth = LOGICAL_WIDTH;
-	m_camera.viewportHeight = LOGICAL_HEIGHT;
+    m_camera.zoom = 1.0f;
+    m_camera.viewportWidth = LOGICAL_WIDTH;
+    m_camera.viewportHeight = LOGICAL_HEIGHT;
     m_text.setCullInset(8.0f);
 
-	app.gl().setCamera(m_camera);
-	app.gl().setClearColor(0.1f, 0.2f, 0.35f, 1.0f);
+    app.gl().setCamera(m_camera);
+    app.gl().setClearColor(0.1f, 0.2f, 0.35f, 1.0f);
 
-	buildSpritePipeline();
+    buildSpritePipeline();
 
     HBE::Renderer::UI::UIStyle style;
     style.textScale = 1.0f;
@@ -79,9 +82,9 @@ void GameLayer::onAttach(Application& app) {
         return;
     }
 
-    // Initialize player box to match goblin size (center-based);
-    if (auto* tr = m_scene.getTransform(m_goblinEntity)) {
-        const float pxScale = SPRITE_PIXEL_SCALE; // or m_tileMap.tilePixelScale if you store it there
+    // Initialize player box to match controlled entity (center-based)
+    if (auto* tr = m_scene.getTransform(m_soldierEntity)) {
+        const float pxScale = SPRITE_PIXEL_SCALE;
 
         m_playerBox.w = PLAYER_BODY_W_PX * pxScale;
         m_playerBox.h = PLAYER_BODY_H_PX * pxScale;
@@ -90,11 +93,11 @@ void GameLayer::onAttach(Application& app) {
         m_playerBox.cy = tr->posY + (PLAYER_BODY_Y_OFFSET_PX * pxScale);
     }
 
-	LogInfo("GameLayer attached.");
+    LogInfo("GameLayer attached.");
 }
 
 void GameLayer::buildSpritePipeline() {
-	auto& resources = m_app->resources();
+    auto& resources = m_app->resources();
 
     // sprite shader
     const char* spriteVs = R"(#version 330 core
@@ -138,9 +141,7 @@ void GameLayer::buildSpritePipeline() {
         float alpha = smoothstep(0.5 - w, 0.5 + w, dist);
         FragColor = vec4(uColor.rgb, uColor.a * alpha);
     }
-)";
-
-
+    )";
 
     m_spriteShader = resources.getOrCreateShader("sprite", spriteVs, spriteFs);
     if (!m_spriteShader) {
@@ -168,6 +169,7 @@ void GameLayer::buildSpritePipeline() {
         m_app->requestQuit();
         return;
     }
+
     // Debug draw setup (uses the same quad mesh)
     if (!m_debug.initialize(resources, m_quadMesh)) {
         LogFatal("GameLayer: DebugDraw2D init failed");
@@ -175,11 +177,13 @@ void GameLayer::buildSpritePipeline() {
         return;
     }
 
+    // Text renderer
     if (!m_text.initialize(m_app->resources(), m_spriteShader, m_quadMesh)) {
         LogFatal("GameLayer: TextRenderer2D init failed");
         m_app->requestQuit();
         return;
     }
+
     // Example font load (put a .ttf in your sandbox assets folder)
     if (!m_text.loadSDFont(m_app->resources(),
         "ui",
@@ -193,7 +197,6 @@ void GameLayer::buildSpritePipeline() {
     else {
         m_text.setActiveFont("ui");
     }
-
 
     // Sprite sheet
     SpriteSheetDesc desc{};
@@ -214,13 +217,14 @@ void GameLayer::buildSpritePipeline() {
         return;
     }
 
-    // material
+    // materials
     m_goblinMaterial.shader = m_spriteShader;
     m_goblinMaterial.texture = m_goblinSheet.texture;
+
     m_soldierMaterial.shader = m_spriteShader;
     m_soldierMaterial.texture = m_soldierSheet.texture;
 
-    // entity
+    // entities
     RenderItem goblin{};
     goblin.mesh = m_quadMesh;
     goblin.material = &m_goblinMaterial;
@@ -228,8 +232,8 @@ void GameLayer::buildSpritePipeline() {
     goblin.transform.posY = 95.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-    goblin.layer = 100; // entites above tiles
-    goblin.sortKey = goblin.transform.posY; // optional for y-sorting
+    goblin.layer = 100; // entities above tiles
+    goblin.sortKey = goblin.transform.posY;
 
     RenderItem soldier{};
     soldier.mesh = m_quadMesh;
@@ -247,63 +251,70 @@ void GameLayer::buildSpritePipeline() {
     m_goblinEntity = m_scene.createEntity(goblin);
     m_soldierEntity = m_scene.createEntity(soldier);
 
-    // animator
-    m_goblinAnimator.sheet = &m_goblinSheet;
+    // -----------------------------
+    // NEW: Per-entity anim SM setup
+    // -----------------------------
 
-    SpriteAnimationDesc GoblinIdle{};
-    GoblinIdle.name = "Idle";
-    GoblinIdle.row = 0;
-    GoblinIdle.startCol = 0;
-    GoblinIdle.frameCount = 6;
-    GoblinIdle.frameDuration = 0.10f;
-    GoblinIdle.loop = true;
+    // Goblin (AI/NPC for now: idle/attack)
+    if (auto* gAnim = m_scene.addSpriteAnimator(m_goblinEntity, &m_goblinSheet)) {
+        // Clips (adjust rows/frames for your sheet layout)
+        gAnim->addClip({ "Idle",   0, 0, 6, 0.10f, true,  1.0f });
+        gAnim->addClip({ "Run",    1, 0, 6, 0.08f, true,  1.0f });
+        gAnim->addClip({ "Attack", 2, 0, 6, 0.07f, false, 1.0f });
 
-    SpriteAnimationDesc GoblinWalk{};
-    GoblinWalk.name = "Walk";
-    GoblinWalk.row = 1;
-    GoblinWalk.startCol = 0;
-    GoblinWalk.frameCount = 6;
-    GoblinWalk.frameDuration = 0.10f;
-    GoblinWalk.loop = true;
+        // Events
+        gAnim->addEvent("Run", 1, "footstep");
+        gAnim->addEvent("Run", 4, "footstep");
+        gAnim->addEvent("Attack", 3, "hitframe");
 
-    m_goblinAnimator.addClip(GoblinIdle);
-    m_goblinAnimator.addClip(GoblinWalk);
-    m_goblinAnimator.play("Idle", true);
+        // States
+        gAnim->addState("Idle", "Idle");
+        gAnim->addState("Run", "Run");
+        gAnim->addState("Attack", "Attack");
 
-    m_soldierAnimator.sheet = &m_soldierSheet;
-    SpriteAnimationDesc SoldierIdle{};
-    SoldierIdle.name = "Idle";
-    SoldierIdle.row = 0;
-    SoldierIdle.startCol = 0;
-    SoldierIdle.frameCount = 6;
-    SoldierIdle.frameDuration = 0.10f;
-    SoldierIdle.loop = true;
+        // Transitions (order matters)
+        gAnim->addTransitionTrigger("*", "Attack", "attack");
+        gAnim->addTransitionBool("Idle", "Run", "moving", true);
+        gAnim->addTransitionBool("Run", "Idle", "moving", false);
+        gAnim->addTransitionFinished("Attack", "Idle");
 
-    SpriteAnimationDesc SoldierWalk{};
-    SoldierWalk.name = "Walk";
-    SoldierWalk.row = 1;
-    SoldierWalk.startCol = 0;
-    SoldierWalk.frameCount = 8;
-    SoldierWalk.frameDuration = 0.10f;
-    SoldierWalk.loop = true;
+        gAnim->setState("Idle", true);
+    }
 
-    m_soldierAnimator.addClip(SoldierIdle);
-    m_soldierAnimator.addClip(SoldierWalk);
-    m_soldierAnimator.play("Idle", true);
+    // Soldier (player-controlled)
+    if (auto* sAnim = m_scene.addSpriteAnimator(m_soldierEntity, &m_soldierSheet)) {
+        sAnim->addClip({ "Idle",   0, 0, 6, 0.10f, true,  1.0f });
+        sAnim->addClip({ "Run",    1, 0, 8, 0.10f, true,  1.0f });
+        sAnim->addClip({ "Attack", 2, 0, 7, 0.07f, false, 1.0f });
+
+        sAnim->addEvent("Run", 2, "footstep");
+        sAnim->addEvent("Run", 6, "footstep");
+        sAnim->addEvent("Attack", 4, "hitframe");
+
+        sAnim->addState("Idle", "Idle");
+        sAnim->addState("Run", "Run");
+        sAnim->addState("Attack", "Attack");
+
+        sAnim->addTransitionTrigger("*", "Attack", "attack");
+        sAnim->addTransitionBool("Idle", "Run", "moving", true);
+        sAnim->addTransitionBool("Run", "Idle", "moving", false);
+        sAnim->addTransitionFinished("Attack", "Idle");
+
+        sAnim->setState("Idle", true);
+    }
 }
 
 void GameLayer::onUpdate(float dt) {
-    // fullscreen toggle stays in layer for now 
+    // fullscreen toggle stays in layer for now
     if (HBE::Platform::Input::IsKeyPressed(SDL_SCANCODE_F11)) {
-
+        // (left blank like your current file)
     }
 
     // ---- stats ----
     m_uiAnimT += dt;
     m_statTimer += (double)dt;
     m_updateCount++;
-
-    m_ui.beginFrame(dt);
+    m_lastDt = dt;
 
     if (m_statTimer >= 0.5) { // update twice per second
         const double window = m_statTimer;
@@ -316,7 +327,7 @@ void GameLayer::onUpdate(float dt) {
         m_statTimer = 0.0;
     }
 
-
+    // Controlled entity = soldier
     Transform2D* tr = m_scene.getTransform(m_soldierEntity);
     Transform2D* trg = m_scene.getTransform(m_goblinEntity);
     if (!tr || !trg) return;
@@ -355,27 +366,43 @@ void GameLayer::onUpdate(float dt) {
     tr->posX = m_playerBox.cx;
     tr->posY = m_playerBox.cy - (PLAYER_BODY_Y_OFFSET_PX * pxScale);
 
-
-    // animation logic
+    // -----------------------------
+    // NEW: drive state machine vars
+    // -----------------------------
     bool isMoving = (moveX != 0.0f || moveY != 0.0f);
-    if (isMoving) m_soldierAnimator.play("Walk");
-    else m_soldierAnimator.play("Idle");
 
-    m_soldierAnimator.update(dt);
-    if (RenderItem* item = m_scene.getRenderItem(m_soldierEntity)) {
-        m_soldierAnimator.apply(*item);
-    }
-    
-    bool isGMoving = false;
-    if (isGMoving) m_goblinAnimator.play("Walk");
-    else m_goblinAnimator.play("Idle");
+    if (auto* sAnim = m_scene.getSpriteAnimator(m_soldierEntity)) {
+        sAnim->setBool("moving", isMoving);
 
-
-    m_goblinAnimator.update(dt);
-    if (RenderItem* gItem = m_scene.getRenderItem(m_goblinEntity)) {
-        m_goblinAnimator.apply(*gItem);
+        // Attack trigger
+        if (Input::IsKeyPressed(SDL_SCANCODE_SPACE)) {
+            sAnim->trigger("attack");
+        }
     }
 
+    // Goblin (idle by default; Enter triggers attack as a quick test)
+    if (auto* gAnim = m_scene.getSpriteAnimator(m_goblinEntity)) {
+        gAnim->setBool("moving", false);
+
+        if (Input::IsKeyPressed(SDL_SCANCODE_RETURN)) {
+            gAnim->trigger("attack");
+        }
+    }
+
+    Transform2D* playerTr = m_scene.getTransform(m_soldierEntity);
+    float px = playerTr ? playerTr->posX : m_camera.x;
+    float py = playerTr ? playerTr->posY : m_camera.y;
+
+    // Tick all animators + apply UVs back onto their RenderItems.
+    // Catch events here (footsteps, hitframes, etc).
+    m_scene.update(dt, [&](const std::string& ev) {
+        if (ev == "footstep") {
+            spawnPopup(px, py - 30.0f, "step", Color4{ 0.8f,0.9f,1.0f,1.0f }, 0.35f, 35.0f);
+        }
+        else if (ev == "hitframe") {
+            spawnPopup(px, py + 50.0f, "HIT!", Color4{ 1.0f,0.3f,0.2f,1.0f }, 0.55f, 25.0f);
+        }
+        });
 
     // camera follow
     m_camera.x = tr->posX;
@@ -389,13 +416,21 @@ void GameLayer::onUpdate(float dt) {
     }
 
     // remove dead
-    m_popups.erase(std::remove_if(m_popups.begin(), m_popups.end(), [](const DebugPopup& p) {return p.life <= 0.0f; }), m_popups.end());
+    m_popups.erase(
+        std::remove_if(m_popups.begin(), m_popups.end(),
+            [](const DebugPopup& p) { return p.life <= 0.0f; }),
+        m_popups.end()
+    );
 }
 
 void GameLayer::onRender() {
     m_frameCount++;
 
+    // Reset per-frame text renderer state
+    m_text.beginFrame(m_frameCount);
+
     Renderer2D& r2d = m_app->renderer2D();
+    m_ui.beginFrame(m_lastDt);
 
     // -------------------------
     // PASS 1: WORLD
@@ -418,10 +453,10 @@ void GameLayer::onRender() {
     dmg.startScale = 1.2f;
     dmg.endScale = 1.0f;
 
-    Transform2D* tr = m_scene.getTransform(m_goblinEntity);
-    if (tr) {
+    Transform2D* trg = m_scene.getTransform(m_goblinEntity);
+    if (trg) {
         m_text.drawTextAnimated(r2d,
-            tr->posX, tr->posY + 40.0f,
+            trg->posX, trg->posY + 40.0f,
             "-25",
             1.0f,
             { 255,0.0f,0.0f,1 },
@@ -445,8 +480,19 @@ void GameLayer::onRender() {
         m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, 0, 1, 0, 1, false);
     }
 
-    r2d.endScene();
+    // world popups
+    for (const auto& p : m_popups) {
+        float t = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 0.0f;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
 
+        Color4 c = p.color;
+        c.a *= t;
+
+        m_text.drawText(r2d, p.x, p.y, p.text, 1.0f, c);
+    }
+
+    r2d.endScene();
 
     // -------------------------
     // PASS 2: UI OVERLAY
@@ -462,7 +508,7 @@ void GameLayer::onRender() {
 
     // Bind UI renderer dependencies now that we’re in UI space
     m_ui.bind(&m_app->renderer2D(), &m_debug, &m_text);
-    
+
     using namespace HBE::Renderer::UI;
 
     UIRect panel;
@@ -497,24 +543,11 @@ void GameLayer::onRender() {
 
     m_ui.endPanel();
 
-    // (Optional) click/scroll popups (these are UI space too)
-    for (const auto& p : m_popups) {
-        float t = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 0.0f;
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
-
-        auto c = p.color;
-        c.a *= t;
-        m_text.drawText(r2d, p.x, p.y, p.text, 1.0f, c);
-    }
-
-    // End UI scene
     r2d.endScene();
 
     // Finish frame bookkeeping
     m_ui.endFrame();
 }
-
 
 bool GameLayer::onEvent(HBE::Core::Event& e) {
     using namespace HBE::Core;
@@ -524,49 +557,13 @@ bool GameLayer::onEvent(HBE::Core::Event& e) {
     if (e.type() == EventType::WindowResize) {
         auto& re = static_cast<WindowResizeEvent&>(e);
 
-        /// For now: keep logical camera constant (1280x720).
-        // Later: we can use re.vpW/re.vpH if you want camera to match viewport.
-        // camera.viewportWidth = LOGICAL_WIDTH;
-        // camera.viewportHeight = LOGICAL_HEIGHT;
+        // For now: keep logical camera constant (1280x720).
+        // Later: use re.vpW/re.vpH if you want camera to match viewport.
 
+        (void)re;
         return false; // not handled
     }
-    //else if (e.type() == EventType::MouseButtonPressed) {
-    //    auto& mb = static_cast<MouseButtonPressedEvent&>(e);
 
-    //    if (mb.inViewport) {
-    //        // left = 1, middle = 2, right = 3 in SDL mouse button numbering
-    //        if (mb.button == 1) {
-    //            spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
-    //            return true;
-    //        }
-    //        else if (mb.button == 3) {
-    //            spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 1,0,0,1 }); // red
-    //            return true;
-    //        }
-    //        else if (mb.button == 2) {
-    //            spawnPopup(mb.logicalX, mb.logicalY, "Click!", HBE::Renderer::Color4{ 0,0,1,1 }); // blue
-    //            return true;
-    //        }
-    //    }
-    //    return false;
-    //}
-    //else if (e.type() == EventType::MouseScrolled) {
-    //    auto& ms = static_cast<MouseScrolledEvent&>(e);
-
-    //    if (ms.inViewport) {
-    //        // SDL Wheel convention: +Y = away from user (often "scroll up")
-    //        if (ms.wheelY > 0.0f) {
-    //            spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 0,1,0,1 }); // green
-    //            return true;
-    //        }
-    //        else if (ms.wheelY < 0.0f) {
-    //            spawnPopup(ms.logicalX, ms.logicalY, "Scrolled!", HBE::Renderer::Color4{ 1,0,0,1 });// red
-    //            return true;
-    //        }
-    //    }
-    //    return false;
-    //}
     return false;
 }
 

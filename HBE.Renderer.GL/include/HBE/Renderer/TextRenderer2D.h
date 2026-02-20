@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <deque>
+#include <cstdint>
 
 #include "HBE/Renderer/Camera2D.h"
 #include "HBE/Renderer/Material.h"
@@ -83,7 +85,7 @@ namespace HBE::Renderer {
             int atlasW = 512,
             int atlasH = 512);
 
-        // NEW: SDF font bake + load
+        // SDF font bake + load
         bool loadSDFont(ResourceCache& cache,
             const std::string& fontName,
             const std::string& ttfPath,
@@ -106,6 +108,10 @@ namespace HBE::Renderer {
         // Positive inset shrinks the view rect (debug), negative expands it.
         // Example: inset=200 => text must be 200 units inside the screen edges.
         void setCullInset(float inset) { m_cullInset = inset; }
+
+        // Call once per frame before issuing any drawText* calls.
+        // This clears transient per-frame material storage so each text draw can have its own tint safely.
+        void beginFrame(std::uint64_t frameIndex);
 
 
     private:
@@ -130,6 +136,10 @@ namespace HBE::Renderer {
 
         Material m_mat{};
         Mesh* m_quad = nullptr;
+
+        std::deque<Material> m_frameMaterials;
+        std::uint64_t m_frameIndex = 0;
+        bool m_frameIndexValid = false;
     };
 
 } // namespace HBE::Renderer

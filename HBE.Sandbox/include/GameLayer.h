@@ -33,6 +33,7 @@ public:
 	int    m_updateCount = 0;  // updates in window
 	float  m_fps = 0.0f;
 	float  m_ups = 0.0f;
+	float m_lastDt = 0.016f;
 
 	// slider
 	float m_volume = 0.75f;
@@ -89,11 +90,9 @@ private:
 
 	HBE::Renderer::Material m_goblinMaterial{};
 	HBE::Renderer::SpriteRenderer2D::SpriteSheetHandle m_goblinSheet{};
-	HBE::Renderer::SpriteRenderer2D::Animator m_goblinAnimator{};
 
 	HBE::Renderer::Material m_soldierMaterial{};
 	HBE::Renderer::SpriteRenderer2D::SpriteSheetHandle m_soldierSheet{};
-	HBE::Renderer::SpriteRenderer2D::Animator m_soldierAnimator{};
 
 	HBE::Renderer::EntityID m_goblinEntity = HBE::Renderer::InvalidEntityID;
 	HBE::Renderer::EntityID m_soldierEntity = HBE::Renderer::InvalidEntityID;
