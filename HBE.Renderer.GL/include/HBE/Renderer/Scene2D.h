@@ -7,11 +7,13 @@
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Transform2D.h"
 #include "HBE/Renderer/SpriteAnimationStateMachine.h"
-#include "HBE/Renderer/ECSComponents2D.h"
+#include "HBE/ECS/ESCSComponents2D.h"
 
 namespace HBE::Renderer {
 
     class Renderer2D;
+    class TileMap;
+    struct TileMapLayer;
 
     // simple opaque handle to an entity in the scene
     using EntityID = HBE::ECS::Entity;
@@ -32,6 +34,10 @@ namespace HBE::Renderer {
         SpriteAnimationStateMachine* addSpriteAnimator(EntityID id, const SpriteRenderer2D::SpriteSheetHandle* sheet);
         SpriteAnimationStateMachine* getSpriteAnimator(EntityID id);
 
+        // Physics/tile collision context
+        // if set, entites with Transform2D + RigidBody2D + Collider2D will collide against the tile layer
+        void setTileCollisionContext(const TileMap* map, const TileMapLayer* collisionLayer);
+
         // remove
         void removeEntity(EntityID id);
 
@@ -47,6 +53,10 @@ namespace HBE::Renderer {
 
     private:
         HBE::ECS::Registry m_reg;
+
+        // optional tile collision pointers (not owned)
+        const TileMap* m_tileMap = nullptr;
+        const TileMapLayer* m_collisionLayer = nullptr;
     };
 
 } // namespace HBE::Renderer
