@@ -1,222 +1,189 @@
-# Honestly Bad Engine (HBE)
+# HBE --- Honestly Bad Engine
 
-**Honestly Bad Engine (HBE)** is a lightweight, modular **2D‑first game engine**
-built completely from scratch in **C++**, using **SDL3** and **OpenGL 3.3**.
+HBE is a modern **2D game engine built in C++** focused on learning,
+extensibility, and clean architecture.\
+It combines an OpenGL renderer, SDL platform layer, and a custom ECS
+gameplay framework to provide a solid foundation for real games --- not
+just demos.
 
-HBE is intentionally explicit and educational — the goal is not to hide systems
-behind magic, but to expose *real engine architecture* in a clean, readable way.
-It serves both as a learning project and as a solid foundation for small‑to‑medium
-2D games.
+This project is actively developed as both a learning platform and a
+long‑term engine architecture experiment.
 
----
+------------------------------------------------------------------------
 
-## 🚀 Current Features (Updated)
+## ✨ Current Features
 
-### 🧠 Core Systems (`HBE.Core`)
-- Application runtime & main loop
-- Layer & LayerStack system (game states, overlays, UI layers)
-- Logging system (Trace → Fatal)
-- High‑resolution timing & delta time
-- Centralized ownership of platform, renderer, and resources
+### Rendering
 
-### 🖥 Platform Layer (`HBE.Platform.SDL`)
-- SDL3 window creation & lifecycle
-- OpenGL context creation
-- Windowed / borderless fullscreen
-- VSync control
-- Keyboard input system (pressed / released / held)
-- Event pumping & platform abstraction
+-   OpenGL‑based 2D renderer
+-   Sprite batching
+-   Sprite sheets + UV animation
+-   Tilemap rendering
+-   Text rendering with SDF fonts
+-   Debug drawing tools
+-   Layer + Y‑sorted rendering
 
-### 🎨 Renderer (`HBE.Renderer` / `HBE.Renderer.GL`)
-- OpenGL 3.3 Core backend
-- **Renderer2D abstraction**
-- **Real sprite batching system**
-  - CPU‑side quad collection
-  - Sorting by material (shader + texture)
-  - Dynamic VBO streaming
-  - Batched draw calls per frame
-- **Draw‑call statistics (draw calls / quads rendered)**
-- Camera2D with logical resolution
-- Mesh system (Pos+UV)
-- Texture2D loading (stb_image)
-- Material system (shader + texture + color)
-- Sprite rendering with UV rects
-- Sprite sheet animation system
-- Resource cache (shaders, meshes, textures)
+### ECS Gameplay Framework
 
-### 🧩 Scene & Gameplay
-- Scene2D entity container
-- RenderItem + Transform2D model
-- Multiple animated entities (player + NPCs)
-- SpriteAnimator with named clips
-- Camera follow
-- Sandbox gameplay layer
+-   Registry‑based ECS (entt‑style design)
+-   Components:
+    -   Transform2D
+    -   SpriteComponent2D
+    -   AnimationComponent2D
+    -   Collider2D
+    -   RigidBody2D
+    -   Script
+-   Systems:
+    -   Script execution
+    -   Physics integration
+    -   Tilemap collision
+    -   Entity‑entity collision
+    -   Animation playback
+    -   Render sorting
 
-### ⚡ Performance Systems
-- **Entity / sprite culling**
-  - Camera‑based AABB culling in `Scene2D::render()`
-  - Off‑screen entities never reach the renderer or batch
-- **Text culling**
-  - World‑space and UI text is culled against the active camera
-  - Off‑screen text does not submit glyph quads
-- Designed to scale cleanly with large tilemaps and many sprites
+Gameplay is now fully ECS‑driven.
 
----
+### Animation System
 
-## 📂 Project Structure
+-   Clip‑based animations
+-   State machines
+-   Parameter‑driven transitions
+-   Animation events (footsteps, hit frames, etc.)
 
-```
-HBE/
-├── HBE.Core/
-│   ├── include/HBE/Core/
-│   └── src/
-├── HBE.Platform.SDL/
-│   ├── include/HBE/Platform/
-│   └── src/
-├── HBE.Renderer/
-│   ├── include/HBE/Renderer/
-│   └── src/
-├── HBE.Renderer.GL/
-│   ├── include/HBE/Renderer/
-│   └── src/
-├── Sandbox/
-│   ├── GameLayer.h / .cpp
-│   └── main.cpp
-└── CMakeLists.txt
-```
+### Tilemaps
 
-All engine headers are included via:
+-   JSON tilemap loading
+-   Multiple layers
+-   Dedicated collision layers
+-   Integrated physics resolution
 
-```cpp
-#include "HBE/..."
-```
+### UI Framework
 
-Each module exports its own `include/` directory.
+-   Immediate‑mode style UI
+-   Panels, sliders, buttons, checkboxes
+-   Debug overlays
 
----
+------------------------------------------------------------------------
 
-## 🧠 Engine Architecture
+## 🧠 Engine Philosophy
 
-### Application + Layer Stack
+HBE is designed around a simple rule:
 
-- `Application` owns:
-  - SDLPlatform
-  - GLRenderer
-  - Renderer2D
-  - SpriteBatch2D
-  - ResourceCache
-  - LayerStack
+> Rendering is not the engine --- gameplay architecture is.
 
-- Layers represent:
-  - Game states (GameLayer, MenuLayer, PauseLayer)
-  - Overlays (UI, Debug tools)
+The engine is built so that:
 
-The main loop lives **entirely inside `Application`**.
+-   Rendering is modular
+-   Gameplay lives in ECS
+-   Systems define behavior
+-   Components define data
 
-`main.cpp` is intentionally minimal.
+This makes future features easier to add:
 
----
+-   AI
+-   particles
+-   audio triggers
+-   save/load
+-   networking
+-   editor tools
+-   prefabs
 
-## 🎬 Sprite Sheets & Animation
+------------------------------------------------------------------------
 
-```cpp
-SpriteSheetDesc desc;
-desc.frameWidth  = 100;
-desc.frameHeight = 100;
+## 🏗️ Project Structure
 
-auto sheet = SpriteRenderer2D::declareSpriteSheet(
-    resources,
-    "orc_sheet",
-    "assets/Orc.png",
-    desc
-);
+    HBE.Platform.SDL/        → windowing, input, platform layer
+    HBE.Renderer.GL/         → OpenGL renderer + resources
+    HBE.Core/                → engine framework + layer system
+    HBE.Sandbox/             → test game + engine showcase
+    assets/                  → maps, sprites, fonts
 
-SpriteAnimationDesc idle;
-idle.name = "Idle";
-idle.row = 0;
-idle.startCol = 0;
-idle.frameCount = 6;
-idle.frameDuration = 0.15f;
-idle.loop = true;
+The sandbox project demonstrates how to build a game using the engine.
 
-SpriteAnimator animator;
-animator.sheet = &sheet;
-animator.addClip(idle);
-animator.play("Idle");
-```
+------------------------------------------------------------------------
 
-Call `update(dt)` and `apply(renderItem)` each frame.
-
----
-
-## 📊 Runtime Stats (Example)
-
-```text
-Batch DrawCalls: 2
-Quads Rendered:  1432
-```
-
-Useful for validating batching, culling, and performance behavior.
-
----
-
-## 🛠 Build Instructions
+## 🛠️ Building
 
 ### Requirements
-- CMake **3.20+**
-- Visual Studio **2022 / 2025** (MSVC) or Clang/GCC
-- SDL3
-- OpenGL 3.3+
-- GLAD
-- stb_image
 
-### Build
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
-```
+-   Windows
+-   Visual Studio 2022+
+-   OpenGL 3.3+ capable GPU
 
----
+### Steps
 
-## 🗺 Roadmap
+1.  Open the solution in Visual Studio
+2.  Set **HBE.Sandbox** as startup project
+3.  Build (x64 Debug or Release)
+4.  Run
 
-### 2D Focus
-- Tilemap chunking
-- Sprite flipping & facing
-- Render layers & Y‑sorting
-- Physics‑lite (AABB)
-- Audio wrapper
-- Editor/debug tooling
+The sandbox scene should load automatically.
 
-### Future 3D (Long‑term)
-- Camera3D
-- OBJ mesh loading
-- Basic lighting & materials
-- Transform hierarchy
+------------------------------------------------------------------------
 
----
+## 🎮 Current Gameplay Demo
 
-## 🤝 Contributing
+The sandbox demonstrates:
 
-Planned contribution areas:
-- Renderer optimizations
-- Animation & tooling
-- Scene & entity systems
-- Documentation & examples
+-   Player movement via ECS scripts
+-   Tilemap collision
+-   NPC collision
+-   Sprite animation state machines
+-   Animation event popups
+-   UI overlay controls
+-   Debug rendering
 
-This project favors **clarity over cleverness**.
+This serves as the reference implementation for engine usage.
 
----
+------------------------------------------------------------------------
 
-## 📝 License
+## 🚧 Roadmap
 
-MIT License — free to use, modify, break, and rebuild.
+### Near‑Term
 
----
+-   Health / damage components
+-   Attack hitboxes
+-   AI movement system
+-   Event messaging framework
+-   Prefab spawning system
 
-## ⭐ Support
+### Mid‑Term
 
-If you enjoy the project, consider starring the repository and following
-development. Feedback and discussion are always welcome.
+-   Editor tooling
+-   Save/load serialization
+-   Scene format
+-   Audio system
+
+### Long‑Term
+
+-   Multi‑scene workflows
+-   Networking model
+-   Full game project built on HBE
+
+------------------------------------------------------------------------
+
+## 📌 Status
+
+The engine now has a complete gameplay loop:
+
+    Script → Physics → Collision → Animation → Render
+
+This marks the transition from "rendering framework" to **actual game
+engine**.
+
+------------------------------------------------------------------------
+
+## 🙌 Author
+
+Albert Tulo IV\
+GitHub: HonestlyBad
+
+This engine is part of a broader effort to build a reusable engine
+ecosystem and real production‑ready tooling.
+
+------------------------------------------------------------------------
+
+## 📄 License
+
+Currently private / experimental.\
+License will be defined when the engine stabilizes.
