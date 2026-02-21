@@ -1,59 +1,62 @@
 #pragma once
 
-#include <vector>
 #include <cstdint>
-#include <optional>
+#include <functional>
 
+#include "HBE/ECS/Registry.h"
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Transform2D.h"
 #include "HBE/Renderer/SpriteAnimationStateMachine.h"
+#include "HBE/ECS/ESCSComponents2D.h"
 
 namespace HBE::Renderer {
-	class Renderer2D;
 
-	// simple opaque handle to an entity in the scene
-	using EntityID = std::uint32_t;
-	inline constexpr EntityID InvalidEntityID = 0;
+    class Renderer2D;
+    class TileMap;
+    struct TileMapLayer;
 
-	class Scene2D {
-	public:
-		Scene2D() = default;
+    // simple opaque handle to an entity in the scene
+    using EntityID = HBE::ECS::Entity;
+    inline constexpr EntityID InvalidEntityID = HBE::ECS::Null;
 
-		// Create an entity by copying a template RenderItem
-		EntityID createEntity(const RenderItem& templateItem);
+    class Scene2D {
+    public:
+        Scene2D() = default;
 
-		// Access
-		RenderItem* getRenderItem(EntityID id);
-		Transform2D* getTransform(EntityID id);
+        // Create an entity by copying a template RenderItem
+        EntityID createEntity(const RenderItem& templateItem);
 
-		// Sprite animation access (optional per entity)
-		// If you call this, the entity will be updated automatically by Scene2D::update().
-		SpriteAnimationStateMachine* addSpriteAnimator(EntityID id, const SpriteRenderer2D::SpriteSheetHandle* sheet);
-		SpriteAnimationStateMachine* getSpriteAnimator(EntityID id);
+        // Access
+        Transform2D* getTransform(EntityID id);
 
-		// remove (soft delete for now)
-		void removeEntity(EntityID id);
+        // Sprite animation access (optional per entity)
+        // If you call this, the entity will be updated automatically by Scene2D::update().
+        SpriteAnimationStateMachine* addSpriteAnimator(EntityID id, const SpriteRenderer2D::SpriteSheetHandle* sheet);
+        SpriteAnimationStateMachine* getSpriteAnimator(EntityID id);
 
-		// update animations (call once per frame in your layer)
-		void update(float dt, const SpriteAnimationStateMachine::EventCallback& onAnimEvent = {});
+        // Physics/tile collision context
+        // if set, entites with Transform2D + RigidBody2D + Collider2D will collide against the tile layer
+        void setTileCollisionContext(const TileMap* map, const TileMapLayer* collisionLayer);
 
-		// render all active entities
-		void render(Renderer2D& renderer);
+        // remove
+        void removeEntity(EntityID id);
 
-	private:
-		struct EntityRecord {
-			EntityID id = InvalidEntityID;
-			RenderItem item;
-			bool active = true;
+        // update animations (call once per frame in your layer)
+        void update(float dt, const SpriteAnimationStateMachine::EventCallback& onAnimEvent = {});
 
-			// Optional per-entity sprite animation state machine
-			std::optional<SpriteAnimationStateMachine> anim;
-		};
+        // render all active entities
+        void render(Renderer2D& renderer);
 
-		std::vector<EntityRecord> m_entities;
-		EntityID m_nextID = 1;
+        // Expose registry if you want to go full ECS later (optional but useful)
+        HBE::ECS::Registry& registry() { return m_reg; }
+        const HBE::ECS::Registry& registry() const { return m_reg; }
 
-		EntityRecord* findRecord(EntityID id);
-		const EntityRecord* findRecord(EntityID id) const;
-	};
-}
+    private:
+        HBE::ECS::Registry m_reg;
+
+        // optional tile collision pointers (not owned)
+        const TileMap* m_tileMap = nullptr;
+        const TileMapLayer* m_collisionLayer = nullptr;
+    };
+
+} // namespace HBE::Renderer

@@ -93,22 +93,29 @@ namespace HBE::Renderer {
 
 	// update / apply
 	void SpriteAnimationStateMachine::update(float dt, const EventCallback& onEvent) {
-		// if sheet isn't set, we can still tick state/vars, but can't apply frames.
 		if (dt < 0.0f) dt = 0.0f;
+
+		// IMPORTANT: resolve pointers every tick.
+		// unordered_map insertions during setup can rehash and invalidate cached pointers.
+		resolvePointersForState();
 
 		// allow transitions to react immediately, even if dt == 0
 		runTransitions();
 
+		// transitions may have changed state
+		resolvePointersForState();
+
 		if (!m_statePtr || !m_clipPtr) {
-			// try to resolve if state exists now
-			resolvePointersForState();
+			// can't animate until state+clip exist
+			m_triggers.clear();
+			return;
 		}
-		if (!m_statePtr || !m_clipPtr) return;
 
 		// scale dt
 		float speed = globalSpeed;
 		speed *= (m_clipPtr->speed <= 0.0f ? 1.0f : m_clipPtr->speed);
-		speed *= (m_clipPtr->speed <= 0.0f ? 1.0f : m_statePtr->speed);
+		speed *= (m_statePtr->speed <= 0.0f ? 1.0f : m_statePtr->speed);
+
 		float scaledDt = dt * speed;
 
 		stepFrames(scaledDt, onEvent);
@@ -116,16 +123,27 @@ namespace HBE::Renderer {
 		// transitions can depend on "finished"
 		runTransitions();
 
-		// triggers are "signle tick" by default
+		// transitions may have changed state
+		resolvePointersForState();
+
+		// triggers are "single tick" by default
 		m_triggers.clear();
 	}
 
 	void SpriteAnimationStateMachine::apply(RenderItem& item) const {
 		if (!sheet) return;
-		if (!m_clipPtr) return;
 
-		int col = m_clipPtr->startCol + m_frame;
-		int row = m_clipPtr->row;
+		// Don't trust cached pointers here either
+		auto itS = m_states.find(m_currentState);
+		if (itS == m_states.end()) return;
+
+		auto itC = m_clips.find(itS->second.clipName);
+		if (itC == m_clips.end()) return;
+
+		const Clip& clip = itC->second;
+
+		int col = clip.startCol + m_frame;
+		int row = clip.row;
 
 		SpriteRenderer2D::setFrame(item, *sheet, col, row);
 	}

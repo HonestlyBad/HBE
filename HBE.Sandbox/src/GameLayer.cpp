@@ -13,6 +13,8 @@
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Transform2D.h"
 
+#include "HBE/ECS/Components.h"
+
 #include <SDL3/SDL_scancode.h>
 #include <cmath>
 #include <vector>
@@ -28,12 +30,14 @@ namespace {
     constexpr float SPRITE_PIXEL_SCALE = 4.0f;
 
     // --- COLLIDER SIZE IN PIXELS (tweak these) ---
-    // This is NOT the frame size (100x100). This is the player's "body" size.
+    // These are NOT frame sizes, they are "body" sizes.
     constexpr float PLAYER_BODY_W_PX = 8.0f;
     constexpr float PLAYER_BODY_H_PX = 14.0f;
-
-    // Optional: shift collider down so feet sit on ground nicer
     constexpr float PLAYER_BODY_Y_OFFSET_PX = +0.5f;
+
+    constexpr float GOBLIN_BODY_W_PX = 10.0f;
+    constexpr float GOBLIN_BODY_H_PX = 14.0f;
+    constexpr float GOBLIN_BODY_Y_OFFSET_PX = +0.5f;
 }
 
 void GameLayer::onAttach(Application& app) {
@@ -45,6 +49,7 @@ void GameLayer::onAttach(Application& app) {
     m_camera.zoom = 1.0f;
     m_camera.viewportWidth = LOGICAL_WIDTH;
     m_camera.viewportHeight = LOGICAL_HEIGHT;
+
     m_text.setCullInset(8.0f);
 
     app.gl().setCamera(m_camera);
@@ -82,15 +87,115 @@ void GameLayer::onAttach(Application& app) {
         return;
     }
 
-    // Initialize player box to match controlled entity (center-based)
-    if (auto* tr = m_scene.getTransform(m_soldierEntity)) {
+    // Hook Scene2D physics/collision to this tilemap layer
+    m_scene.setTileCollisionContext(&m_tileMap, m_collisionLayer);
+
+    // -----------------------------
+    // ECS: attach gameplay components + scripts
+    // -----------------------------
+    auto& reg = m_scene.registry();
+
+    // Player (soldier): Collider + Rigidbody + Script controller
+    if (reg.valid(m_soldierEntity)) {
         const float pxScale = SPRITE_PIXEL_SCALE;
 
-        m_playerBox.w = PLAYER_BODY_W_PX * pxScale;
-        m_playerBox.h = PLAYER_BODY_H_PX * pxScale;
+        HBE::ECS::Collider2D col{};
+        col.halfW = 0.5f * (PLAYER_BODY_W_PX * pxScale);
+        col.halfH = 0.5f * (PLAYER_BODY_H_PX * pxScale);
+        col.offsetX = 0.0f;
+        col.offsetY = (PLAYER_BODY_Y_OFFSET_PX * pxScale);
 
-        m_playerBox.cx = tr->posX;
-        m_playerBox.cy = tr->posY + (PLAYER_BODY_Y_OFFSET_PX * pxScale);
+        if (!reg.has<HBE::ECS::Collider2D>(m_soldierEntity))
+            reg.emplace<HBE::ECS::Collider2D>(m_soldierEntity, col);
+
+        HBE::ECS::RigidBody2D rb{};
+        rb.linearDamping = 0.0f;
+        rb.isStatic = false;
+
+        if (!reg.has<HBE::ECS::RigidBody2D>(m_soldierEntity))
+            reg.emplace<HBE::ECS::RigidBody2D>(m_soldierEntity, rb);
+
+        HBE::ECS::Script sc{};
+        sc.name = "PlayerController";
+        sc.onUpdate = [this](HBE::ECS::Entity e, float dt) {
+            (void)dt;
+
+            auto& r = m_scene.registry();
+            if (!r.has<HBE::ECS::RigidBody2D>(e) || !r.has<Transform2D>(e)) return;
+
+            auto& body = r.get<HBE::ECS::RigidBody2D>(e);
+
+            const bool Up = Input::IsKeyDown(SDL_SCANCODE_W) || Input::IsKeyDown(SDL_SCANCODE_UP);
+            const bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
+            const bool Left = Input::IsKeyDown(SDL_SCANCODE_A) || Input::IsKeyDown(SDL_SCANCODE_LEFT);
+            const bool Right = Input::IsKeyDown(SDL_SCANCODE_D) || Input::IsKeyDown(SDL_SCANCODE_RIGHT);
+
+            float moveX = 0.0f;
+            float moveY = 0.0f;
+            if (Up) moveY += 1.0f;
+            if (Down) moveY -= 1.0f;
+            if (Left) moveX -= 1.0f;
+            if (Right) moveX += 1.0f;
+
+            if (moveX != 0.0f || moveY != 0.0f) {
+                const float len = std::sqrt(moveX * moveX + moveY * moveY);
+                if (len > 0.0f) { moveX /= len; moveY /= len; }
+            }
+
+            const float speed = 300.0f;
+            body.velX = moveX * speed;
+            body.velY = moveY * speed;
+
+            const bool isMoving = (moveX != 0.0f || moveY != 0.0f);
+
+            if (auto* sAnim = m_scene.getSpriteAnimator(e)) {
+                sAnim->setBool("moving", isMoving);
+
+                if (Input::IsKeyPressed(SDL_SCANCODE_SPACE)) {
+                    sAnim->trigger("attack");
+                }
+            }
+            };
+
+        if (!reg.has<HBE::ECS::Script>(m_soldierEntity))
+            reg.emplace<HBE::ECS::Script>(m_soldierEntity, std::move(sc));
+    }
+
+    // Goblin: Collider + STATIC Rigidbody + optional script
+    if (reg.valid(m_goblinEntity)) {
+        const float pxScale = SPRITE_PIXEL_SCALE;
+
+        HBE::ECS::Collider2D col{};
+        col.halfW = 0.5f * (GOBLIN_BODY_W_PX * pxScale);
+        col.halfH = 0.5f * (GOBLIN_BODY_H_PX * pxScale);
+        col.offsetX = 0.0f;
+        col.offsetY = (GOBLIN_BODY_Y_OFFSET_PX * pxScale);
+
+        if (!reg.has<HBE::ECS::Collider2D>(m_goblinEntity))
+            reg.emplace<HBE::ECS::Collider2D>(m_goblinEntity, col);
+
+        HBE::ECS::RigidBody2D rb{};
+        rb.isStatic = true;     // IMPORTANT: stays put, acts like a blocker
+        rb.linearDamping = 0.0f;
+
+        if (!reg.has<HBE::ECS::RigidBody2D>(m_goblinEntity))
+            reg.emplace<HBE::ECS::RigidBody2D>(m_goblinEntity, rb);
+
+        // Goblin test script (Enter = attack)
+        HBE::ECS::Script sc{};
+        sc.name = "GoblinTest";
+        sc.onUpdate = [this](HBE::ECS::Entity e, float dt) {
+            (void)dt;
+            if (auto* gAnim = m_scene.getSpriteAnimator(e)) {
+                gAnim->setBool("moving", false);
+                if (Input::IsKeyPressed(SDL_SCANCODE_RETURN)) {
+                    gAnim->trigger("attack");
+                }
+            }
+            };
+
+        if (!reg.has<HBE::ECS::Script>(m_goblinEntity))
+            reg.emplace<HBE::ECS::Script>(m_goblinEntity, std::move(sc));
     }
 
     LogInfo("GameLayer attached.");
@@ -122,20 +227,17 @@ void GameLayer::buildSpritePipeline() {
     uniform sampler2D uTex;
     uniform vec4 uColor;
 
-    // Optional: SDF font rendering (TextRenderer2D toggles these via Material)
     uniform int uIsSDF;
     uniform float uSDFSoftness;
 
     void main() {
         vec4 tex = texture(uTex, vUV);
 
-        // Normal sprite path
         if (uIsSDF == 0) {
             FragColor = tex * uColor;
             return;
         }
 
-        // SDF path: distance is stored in alpha (0..1), edge is at 0.5
         float dist = tex.a;
         float w = fwidth(dist) * max(uSDFSoftness, 0.001);
         float alpha = smoothstep(0.5 - w, 0.5 + w, dist);
@@ -150,22 +252,22 @@ void GameLayer::buildSpritePipeline() {
         return;
     }
 
-    // quad mesh (pos + uv)
+    // quad mesh (pos + uv) as 2 triangles (6 verts) for the current Mesh API
     std::vector<float> quadVerts = {
-        // x,     y,     z,    u,    v
-        -0.5f, -0.5f,  0.0f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.0f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.0f,  1.0f, 1.0f,
+        // tri 1
+        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
+         0.5f, -0.5f, 0.0f,   1.0f, 0.0f,
+         0.5f,  0.5f, 0.0f,   1.0f, 1.0f,
 
-        -0.5f, -0.5f,  0.0f,  0.0f, 0.0f,
-         0.5f,  0.5f,  0.0f,  1.0f, 1.0f,
-        -0.5f,  0.5f,  0.0f,  0.0f, 1.0f
+         // tri 2
+          0.5f,  0.5f, 0.0f,   1.0f, 1.0f,
+         -0.5f,  0.5f, 0.0f,   0.0f, 1.0f,
+         -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
     };
 
-    m_quadMesh = resources.getOrCreateMeshPosUV("quad_pos_uv", quadVerts, 6);
-    m_app->renderer2D().setSpriteQuadMesh(m_quadMesh);
+    m_quadMesh = resources.getOrCreateMeshPosUV("quad", quadVerts, 6);
     if (!m_quadMesh) {
-        LogFatal("GameLayer: Failed to create quad mesh");
+        LogFatal("GameLayer: failed to create quad mesh.");
         m_app->requestQuit();
         return;
     }
@@ -184,14 +286,14 @@ void GameLayer::buildSpritePipeline() {
         return;
     }
 
-    // Example font load (put a .ttf in your sandbox assets folder)
+    // Font
     if (!m_text.loadSDFont(m_app->resources(),
         "ui",
         "assets/fonts/BoldPixels.ttf",
-        16.0f,   // bake size (bigger = better at huge scaling)
+        16.0f,
         1024, 1024,
-        12       // padding (bigger = safer for extreme scaling)
-    )) {
+        12))
+    {
         LogError("FAILED to load font: assets/fonts/BoldPixels.ttf");
     }
     else {
@@ -232,7 +334,7 @@ void GameLayer::buildSpritePipeline() {
     goblin.transform.posY = 95.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-    goblin.layer = 100; // entities above tiles
+    goblin.layer = 100; // base entity layer
     goblin.sortKey = goblin.transform.posY;
 
     RenderItem soldier{};
@@ -242,7 +344,9 @@ void GameLayer::buildSpritePipeline() {
     soldier.transform.posY = 95.0f;
     soldier.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     soldier.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-    soldier.layer = 100;
+
+    // Make player render above goblin:
+    soldier.layer = 200;
     soldier.sortKey = soldier.transform.posY;
 
     SpriteRenderer2D::setFrame(goblin, m_goblinSheet, 0, 0);
@@ -252,27 +356,23 @@ void GameLayer::buildSpritePipeline() {
     m_soldierEntity = m_scene.createEntity(soldier);
 
     // -----------------------------
-    // NEW: Per-entity anim SM setup
+    // Per-entity anim SM setup
     // -----------------------------
 
-    // Goblin (AI/NPC for now: idle/attack)
+    // Goblin
     if (auto* gAnim = m_scene.addSpriteAnimator(m_goblinEntity, &m_goblinSheet)) {
-        // Clips (adjust rows/frames for your sheet layout)
         gAnim->addClip({ "Idle",   0, 0, 6, 0.10f, true,  1.0f });
         gAnim->addClip({ "Run",    1, 0, 6, 0.08f, true,  1.0f });
         gAnim->addClip({ "Attack", 2, 0, 6, 0.07f, false, 1.0f });
 
-        // Events
         gAnim->addEvent("Run", 1, "footstep");
         gAnim->addEvent("Run", 4, "footstep");
         gAnim->addEvent("Attack", 3, "hitframe");
 
-        // States
         gAnim->addState("Idle", "Idle");
         gAnim->addState("Run", "Run");
         gAnim->addState("Attack", "Attack");
 
-        // Transitions (order matters)
         gAnim->addTransitionTrigger("*", "Attack", "attack");
         gAnim->addTransitionBool("Idle", "Run", "moving", true);
         gAnim->addTransitionBool("Run", "Idle", "moving", false);
@@ -281,7 +381,7 @@ void GameLayer::buildSpritePipeline() {
         gAnim->setState("Idle", true);
     }
 
-    // Soldier (player-controlled)
+    // Soldier
     if (auto* sAnim = m_scene.addSpriteAnimator(m_soldierEntity, &m_soldierSheet)) {
         sAnim->addClip({ "Idle",   0, 0, 6, 0.10f, true,  1.0f });
         sAnim->addClip({ "Run",    1, 0, 8, 0.10f, true,  1.0f });
@@ -316,7 +416,7 @@ void GameLayer::onUpdate(float dt) {
     m_updateCount++;
     m_lastDt = dt;
 
-    if (m_statTimer >= 0.5) { // update twice per second
+    if (m_statTimer >= 0.5) {
         const double window = m_statTimer;
 
         m_fps = (float)((double)m_frameCount / window);
@@ -327,75 +427,17 @@ void GameLayer::onUpdate(float dt) {
         m_statTimer = 0.0;
     }
 
-    // Controlled entity = soldier
-    Transform2D* tr = m_scene.getTransform(m_soldierEntity);
-    Transform2D* trg = m_scene.getTransform(m_goblinEntity);
-    if (!tr || !trg) return;
-
-    bool Up = Input::IsKeyDown(SDL_SCANCODE_W) || Input::IsKeyDown(SDL_SCANCODE_UP);
-    bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
-    bool Left = Input::IsKeyDown(SDL_SCANCODE_A) || Input::IsKeyDown(SDL_SCANCODE_LEFT);
-    bool Right = Input::IsKeyDown(SDL_SCANCODE_D) || Input::IsKeyDown(SDL_SCANCODE_RIGHT);
-
-    float moveX = 0.0f;
-    float moveY = 0.0f;
-    if (Up) moveY += 1.0f;
-    if (Down) moveY -= 1.0f;
-    if (Left) moveX -= 1.0f;
-    if (Right) moveX += 1.0f;
-
-    if (moveX != 0.0f || moveY != 0.0f) {
-        float len = std::sqrt(moveX * moveX + moveY * moveY);
-        if (len > 0.0f) { moveX /= len; moveY /= len; }
-    }
-
-    const float speed = 300.0f;
-    m_velX = moveX * speed;
-    m_velY = moveY * speed;
-
-    // sync player box center with transform center before moving
-    const float pxScale = SPRITE_PIXEL_SCALE;
-
-    m_playerBox.cx = tr->posX;
-    m_playerBox.cy = tr->posY + (PLAYER_BODY_Y_OFFSET_PX * pxScale);
-
-    // collide against tiles
-    HBE::Renderer::TileCollision::moveAndCollide(m_tileMap, *m_collisionLayer, m_playerBox, m_velX, m_velY, dt);
-
-    // apply resolved position back to entity
-    tr->posX = m_playerBox.cx;
-    tr->posY = m_playerBox.cy - (PLAYER_BODY_Y_OFFSET_PX * pxScale);
-
-    // -----------------------------
-    // NEW: drive state machine vars
-    // -----------------------------
-    bool isMoving = (moveX != 0.0f || moveY != 0.0f);
-
-    if (auto* sAnim = m_scene.getSpriteAnimator(m_soldierEntity)) {
-        sAnim->setBool("moving", isMoving);
-
-        // Attack trigger
-        if (Input::IsKeyPressed(SDL_SCANCODE_SPACE)) {
-            sAnim->trigger("attack");
-        }
-    }
-
-    // Goblin (idle by default; Enter triggers attack as a quick test)
-    if (auto* gAnim = m_scene.getSpriteAnimator(m_goblinEntity)) {
-        gAnim->setBool("moving", false);
-
-        if (Input::IsKeyPressed(SDL_SCANCODE_RETURN)) {
-            gAnim->trigger("attack");
-        }
-    }
-
+    // Controlled entity (for camera follow)
     Transform2D* playerTr = m_scene.getTransform(m_soldierEntity);
-    float px = playerTr ? playerTr->posX : m_camera.x;
-    float py = playerTr ? playerTr->posY : m_camera.y;
+    if (!playerTr) return;
 
-    // Tick all animators + apply UVs back onto their RenderItems.
-    // Catch events here (footsteps, hitframes, etc).
+    // Tick scripts + physics + animators.
+    // Catch animation events here.
     m_scene.update(dt, [&](const std::string& ev) {
+        Transform2D* tr = m_scene.getTransform(m_soldierEntity);
+        const float px = tr ? tr->posX : m_camera.x;
+        const float py = tr ? tr->posY : m_camera.y;
+
         if (ev == "footstep") {
             spawnPopup(px, py - 30.0f, "step", Color4{ 0.8f,0.9f,1.0f,1.0f }, 0.35f, 35.0f);
         }
@@ -405,14 +447,14 @@ void GameLayer::onUpdate(float dt) {
         });
 
     // camera follow
-    m_camera.x = tr->posX;
-    m_camera.y = tr->posY;
+    m_camera.x = playerTr->posX;
+    m_camera.y = playerTr->posY;
     m_app->gl().setCamera(m_camera);
 
     // debug popup aging / movement
     for (auto& p : m_popups) {
         p.life -= dt;
-        p.y += p.floatSpeed * dt; // float upward
+        p.y += p.floatSpeed * dt;
     }
 
     // remove dead
@@ -472,12 +514,40 @@ void GameLayer::onRender() {
 
     // debug draw (WORLD)
     if (m_debugDraw) {
-        m_debug.rect(r2d, m_playerBox.cx, m_playerBox.cy,
-            m_playerBox.w, m_playerBox.h,
-            1, 0, 0, 1, false);
+        auto& reg = m_scene.registry();
 
-        m_debug.rect(r2d, 8.0f, 8.0f, 16.0f, 16.0f, 1, 1, 0, 1, false);
-        m_debug.rect(r2d, 32.0f, 32.0f, 64.0f, 64.0f, 0, 1, 0, 1, false);
+        // Player collider (red)
+        if (reg.valid(m_soldierEntity) &&
+            reg.has<Transform2D>(m_soldierEntity) &&
+            reg.has<HBE::ECS::Collider2D>(m_soldierEntity))
+        {
+            const auto& tr = reg.get<Transform2D>(m_soldierEntity);
+            const auto& col = reg.get<HBE::ECS::Collider2D>(m_soldierEntity);
+
+            const float cx = tr.posX + col.offsetX;
+            const float cy = tr.posY + col.offsetY;
+            const float w = col.halfW * 2.0f;
+            const float h = col.halfH * 2.0f;
+
+            // DebugDraw2D::rect takes CENTER coords in your build
+            m_debug.rect(r2d, cx, cy, w, h, 1, 0, 0, 1, false);
+        }
+
+        // Goblin collider (green)
+        if (reg.valid(m_goblinEntity) &&
+            reg.has<Transform2D>(m_goblinEntity) &&
+            reg.has<HBE::ECS::Collider2D>(m_goblinEntity))
+        {
+            const auto& tr = reg.get<Transform2D>(m_goblinEntity);
+            const auto& col = reg.get<HBE::ECS::Collider2D>(m_goblinEntity);
+
+            const float cx = tr.posX + col.offsetX;
+            const float cy = tr.posY + col.offsetY;
+            const float w = col.halfW * 2.0f;
+            const float h = col.halfH * 2.0f;
+
+            m_debug.rect(r2d, cx, cy, w, h, 0, 1, 0, 1, false);
+        }
     }
 
     // world popups
@@ -545,7 +615,6 @@ void GameLayer::onRender() {
 
     r2d.endScene();
 
-    // Finish frame bookkeeping
     m_ui.endFrame();
 }
 
@@ -556,18 +625,16 @@ bool GameLayer::onEvent(HBE::Core::Event& e) {
 
     if (e.type() == EventType::WindowResize) {
         auto& re = static_cast<WindowResizeEvent&>(e);
-
-        // For now: keep logical camera constant (1280x720).
-        // Later: use re.vpW/re.vpH if you want camera to match viewport.
-
         (void)re;
-        return false; // not handled
+        return false;
     }
 
     return false;
 }
 
-void GameLayer::spawnPopup(float x, float y, const std::string& text, const HBE::Renderer::Color4& color, float lifetimeSeconds, float floatUpSpeed) {
+void GameLayer::spawnPopup(float x, float y, const std::string& text,
+    const HBE::Renderer::Color4& color, float lifetimeSeconds, float floatUpSpeed)
+{
     DebugPopup p;
     p.text = text;
     p.x = x;

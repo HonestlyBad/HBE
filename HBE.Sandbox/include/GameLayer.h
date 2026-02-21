@@ -79,11 +79,6 @@ private:
 	HBE::Renderer::TileMapRenderer m_tileRenderer{};
 	const HBE::Renderer::TileMapLayer* m_collisionLayer = nullptr;
 
-	// player collision box (center-based)
-	HBE::Renderer::AABB m_playerBox{};
-	float m_velX = 0.0f;
-	float m_velY = 0.0f;
-
 	// resources
 	HBE::Renderer::GLShader* m_spriteShader = nullptr;
 	HBE::Renderer::Mesh* m_quadMesh = nullptr;
