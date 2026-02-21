@@ -2,140 +2,184 @@
 #include "HBE/Renderer/Renderer2D.h"
 #include "HBE/Core/Log.h"
 #include "HBE/Renderer/Material.h"
+#include "HBE/Renderer/Mesh.h"
+
 #include <cmath>
+#include <cstring>
 
 namespace HBE::Renderer {
 
-	using HBE::Core::LogError;
+    using HBE::Core::LogError;
 
-	Scene2D::EntityRecord* Scene2D::findRecord(EntityID id) {
-		if (id == InvalidEntityID) return nullptr;
-		// simple index-based lookup: id = index + 1
-		std::size_t index = static_cast<std::size_t>(id - 1);
-		if (index >= m_entities.size()) return nullptr;
-		EntityRecord& rec = m_entities[index];
-		if (!rec.active || rec.id != id) return nullptr;
-		return &rec;
-	}
+    EntityID Scene2D::createEntity(const RenderItem& templateItem) {
+        EntityID e = m_reg.create();
 
-	const Scene2D::EntityRecord* Scene2D::findRecord(EntityID id) const {
-		if (id == InvalidEntityID) return nullptr;
-		std::size_t index = static_cast<std::size_t>(id - 1);
-		if (index >= m_entities.size()) return nullptr;
-		const EntityRecord& rec = m_entities[index];
-		if (!rec.active || rec.id != id) return nullptr;
-		return &rec;
-	}
+        // Transform component
+        m_reg.emplace<Transform2D>(e, templateItem.transform);
 
-	EntityID Scene2D::createEntity(const RenderItem& templateItem) {
-		EntityRecord rec;
-		rec.id = m_nextID++;
-		rec.item = templateItem;
-		rec.active = true;
-		m_entities.push_back(rec);
+        // Sprite component
+        SpriteComponent2D sprite;
+        sprite.mesh = templateItem.mesh;
+        sprite.material = templateItem.material;
+        sprite.layer = templateItem.layer;
+        sprite.sortKey = templateItem.sortKey;
+        
+        // Copy UVs, but guard against "all zeros" (invisible) defaults.
+        const float u0 = templateItem.uvRect[0];
+        const float v0 = templateItem.uvRect[1];
+        const float u1 = templateItem.uvRect[2];
+        const float v1 = templateItem.uvRect[3];
 
-		return rec.id;
-	}
+        const bool allZero = (u0 == 0.0f && v0 == 0.0f && u1 == 0.0f && v1 == 0.0f);
 
-	RenderItem* Scene2D::getRenderItem(EntityID id) {
-		EntityRecord* rec = findRecord(id);
-		return rec ? &rec->item : nullptr;
-	}
+        if (allZero) {
+            // Default to full texture until an animation applies proper atlas UVs.
+            sprite.uvRect[0] = 0.0f; sprite.uvRect[1] = 0.0f;
+            sprite.uvRect[2] = 1.0f; sprite.uvRect[3] = 1.0f;
+        }
+        else {
+            sprite.uvRect[0] = u0; sprite.uvRect[1] = v0;
+            sprite.uvRect[2] = u1; sprite.uvRect[3] = v1;
+        }
 
-	Transform2D* Scene2D::getTransform(EntityID id) {
-		EntityRecord* rec = findRecord(id);
-		return rec ? &rec->item.transform : nullptr;
-	}
+        m_reg.emplace<SpriteComponent2D>(e, sprite);
 
-	SpriteAnimationStateMachine* Scene2D::addSpriteAnimator(EntityID id, const SpriteRenderer2D::SpriteSheetHandle* sheet) {
-		EntityRecord* rec = findRecord(id);
-		if (!rec) return nullptr;
+        return e;
+    }
 
-		if (!rec->anim.has_value()) {
-			rec->anim.emplace();
-		}
+    Transform2D* Scene2D::getTransform(EntityID id) {
+        if (!m_reg.valid(id)) return nullptr;
+        if (!m_reg.has<Transform2D>(id)) return nullptr;
+        return &m_reg.get<Transform2D>(id);
+    }
 
-		rec->anim->sheet = sheet;
-		return &rec->anim.value();
-	}
+    SpriteAnimationStateMachine* Scene2D::addSpriteAnimator(EntityID id, const SpriteRenderer2D::SpriteSheetHandle* sheet) {
+        if (!m_reg.valid(id)) return nullptr;
 
-	SpriteAnimationStateMachine* Scene2D::getSpriteAnimator(EntityID id) {
-		EntityRecord* rec = findRecord(id);
-		if (!rec || !rec->anim.has_value()) return nullptr;
-		return &rec->anim.value();
-	}
+        auto& anim = m_reg.emplace<AnimationComponent2D>(id);
+        anim.sm.sheet = sheet;
 
-	void Scene2D::removeEntity(EntityID id) {
-		EntityRecord* rec = findRecord(id);
-		if (rec) {
-			rec->active = false;
-		}
-	}
+        // Force an immediate UV apply so the sprite is visible on the first frame.
+        if (m_reg.has<SpriteComponent2D>(id)) {
+            auto& spr = m_reg.get<SpriteComponent2D>(id);
 
-	void Scene2D::update(float dt, const SpriteAnimationStateMachine::EventCallback& onAnimEvent) {
-		for (auto& rec : m_entities) {
-			if (!rec.active) continue;
+            RenderItem tmp;
+            tmp.mesh = spr.mesh;
+            tmp.material = spr.material;
+            tmp.layer = spr.layer;
+            tmp.sortKey = spr.sortKey;
+            std::memcpy(tmp.uvRect, spr.uvRect, sizeof(tmp.uvRect));
 
-			if (rec.anim.has_value()) {
-				rec.anim->update(dt, onAnimEvent);
-				rec.anim->apply(rec.item);
-			}
-		}
-	}
+            // Update with dt=0 to latch first frame, then apply.
+            anim.sm.update(0.0f, {});
+            anim.sm.apply(tmp);
 
-	void Scene2D::render(Renderer2D& renderer) {
-		// If we have a camera, we can cull entities outside the view.
-		const Camera2D* cam = renderer.activeCamera();
+            std::memcpy(spr.uvRect, tmp.uvRect, sizeof(spr.uvRect));
+        }
 
-		// Camera view rect in world space
-		float viewL = -1e9f, viewR = 1e9f, viewB = -1e9f, viewT = 1e9f;
-		bool canCull = false;
+        return &anim.sm;
+    }
 
-		if (cam) {
-			const float zoom = (cam->zoom > 0.0001f) ? cam->zoom : 0.0001f;
-			const float halfW = 0.5f * cam->viewportWidth / zoom;
-			const float halfH = 0.5f * cam->viewportHeight / zoom;
+    SpriteAnimationStateMachine* Scene2D::getSpriteAnimator(EntityID id) {
+        if (!m_reg.valid(id)) return nullptr;
+        if (!m_reg.has<AnimationComponent2D>(id)) return nullptr;
+        return &m_reg.get<AnimationComponent2D>(id).sm;
+    }
 
-			// Pad slightly so sprites don't pop on edges if you have rounding/snapping
-			const float pad = 8.0f;
+    void Scene2D::removeEntity(EntityID id) {
+        m_reg.destroy(id);
+    }
 
-			viewL = cam->x - halfW - pad;
-			viewR = cam->x + halfW + pad;
-			viewB = cam->y - halfH - pad;
-			viewT = cam->y + halfH + pad;
+    void Scene2D::update(float dt, const SpriteAnimationStateMachine::EventCallback& onAnimEvent) {
+        // Entities that have animation + sprite
+        for (auto e : m_reg.view<AnimationComponent2D, SpriteComponent2D>()) {
+            auto& anim = m_reg.get<AnimationComponent2D>(e).sm;
+            auto& spr = m_reg.get<SpriteComponent2D>(e);
 
-			canCull = true;
-		}
+            anim.update(dt, onAnimEvent);
 
-		for (auto& rec : m_entities) {
-			if (!rec.active) continue;
+            // Apply animation to UVs.
+            // SpriteAnimationStateMachine::apply currently targets RenderItem, so we adapt:
+            RenderItem tmp;
+            tmp.mesh = spr.mesh;
+            tmp.material = spr.material;
+            tmp.layer = spr.layer;
+            tmp.sortKey = spr.sortKey;
+            std::memcpy(tmp.uvRect, spr.uvRect, sizeof(tmp.uvRect));
 
-			if (!rec.item.mesh || !rec.item.material || !rec.item.material->shader) {
-				LogError("Scene2D: render failed for an entity (missing mesh / material / shader)");
-				continue;
-			}
+            anim.apply(tmp);
 
-			// ---- CULLING ----
-			if (canCull) {
-				// Treat transform.pos as center, scale as width/height (your quad mesh is centered)
-				const float cx = rec.item.transform.posX;
-				const float cy = rec.item.transform.posY;
+            std::memcpy(spr.uvRect, tmp.uvRect, sizeof(spr.uvRect));
+        }
+    }
 
-				const float hw = std::fabs(rec.item.transform.scaleX) * 0.5f;
-				const float hh = std::fabs(rec.item.transform.scaleY) * 0.5f;
+    void Scene2D::render(Renderer2D& renderer) {
+        const Camera2D* cam = renderer.activeCamera();
 
-				const float aL = cx - hw;
-				const float aR = cx + hw;
-				const float aB = cy - hh;
-				const float aT = cy + hh;
+        // Camera view rect in world space (no per-entity pad here)
+        float viewL = -1e9f, viewR = 1e9f, viewB = -1e9f, viewT = 1e9f;
+        bool canCull = false;
 
-				// If AABB does NOT overlap the camera rect, skip it
-				if (aR < viewL || aL > viewR || aT < viewB || aB > viewT) {
-					continue;
-				}
-			}
+        if (cam) {
+            const float zoom = (cam->zoom > 0.0001f) ? cam->zoom : 0.0001f;
+            const float halfW = 0.5f * cam->viewportWidth / zoom;
+            const float halfH = 0.5f * cam->viewportHeight / zoom;
 
-			renderer.draw(rec.item);
-		}
-	}
-}
+            viewL = cam->x - halfW;
+            viewR = cam->x + halfW;
+            viewB = cam->y - halfH;
+            viewT = cam->y + halfH;
+
+            canCull = true;
+        }
+
+        for (auto e : m_reg.view<Transform2D, SpriteComponent2D>()) {
+            auto& tr = m_reg.get<Transform2D>(e);
+            auto& spr = m_reg.get<SpriteComponent2D>(e);
+
+            if (!spr.mesh || !spr.material || !spr.material->shader) {
+                LogError("Scene2D: render failed for an entity (missing mesh / material / shader)");
+                continue;
+            }
+
+            // ---- CULLING ----
+            if (canCull) {
+                const float cx = tr.posX;
+                const float cy = tr.posY;
+
+                const float hw = std::fabs(tr.scaleX) * 0.5f;
+                const float hh = std::fabs(tr.scaleY) * 0.5f;
+
+                // Per-entity cull padding (tweak 0.25f)
+                const float pad = 1.0f * std::max(std::fabs(tr.scaleX), std::fabs(tr.scaleY));
+
+                const float aL = cx - hw;
+                const float aR = cx + hw;
+                const float aB = cy - hh;
+                const float aT = cy + hh;
+
+                if (aR < (viewL - pad) || aL >(viewR + pad) ||
+                    aT < (viewB - pad) || aB >(viewT + pad)) {
+                    continue;
+                }
+            }
+
+            // UVRect must be {u0, v0, uScale, vScale}. If scale is zero, it will vanish in batching.
+            if (spr.uvRect[2] <= 0.0f || spr.uvRect[3] <= 0.0f) {
+                spr.uvRect[0] = 0.0f; spr.uvRect[1] = 0.0f;
+                spr.uvRect[2] = 1.0f; spr.uvRect[3] = 1.0f;
+            }
+
+            RenderItem item;
+            item.mesh = spr.mesh;
+            item.material = spr.material;
+            item.transform = tr;
+            item.layer = spr.layer;
+            item.sortKey = spr.sortKey;
+            std::memcpy(item.uvRect, spr.uvRect, sizeof(item.uvRect));
+
+            renderer.draw(item);
+        }
+    }
+
+} // namespace HBE::Renderer

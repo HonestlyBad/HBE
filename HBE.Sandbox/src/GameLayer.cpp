@@ -229,6 +229,7 @@ void GameLayer::buildSpritePipeline() {
     goblin.mesh = m_quadMesh;
     goblin.material = &m_goblinMaterial;
     goblin.transform.posX = 1080.0f;
+    /*goblin.transform.posX = 300.0f;*/
     goblin.transform.posY = 95.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
