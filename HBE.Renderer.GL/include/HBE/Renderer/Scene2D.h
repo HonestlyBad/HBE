@@ -19,6 +19,18 @@ namespace HBE::Renderer {
     using EntityID = HBE::ECS::Entity;
     inline constexpr EntityID InvalidEntityID = HBE::ECS::Null;
 
+    struct Physics2DSettings {
+        // World-space gravity (negative = down if +Y is up)
+        float gravityY = -1800.0f;
+
+        // Sub-stepping helps stability when dt spikes or velocities get high.
+        // 0 disables and uses a single step per frame.
+        int maxSubSteps = 4;
+
+        // Upper bound per substep (seconds). Smaller = more stable.
+        float maxStepDt = 1.0f / 120.0f;
+    };
+
     class Scene2D {
     public:
         Scene2D() = default;
@@ -35,8 +47,12 @@ namespace HBE::Renderer {
         SpriteAnimationStateMachine* getSpriteAnimator(EntityID id);
 
         // Physics/tile collision context
-        // if set, entites with Transform2D + RigidBody2D + Collider2D will collide against the tile layer
+        // if set, entities with Transform2D + RigidBody2D + Collider2D will collide against the tile layer
         void setTileCollisionContext(const TileMap* map, const TileMapLayer* collisionLayer);
+
+        // Physics settings
+        void setPhysics2DSettings(const Physics2DSettings& s) { m_physics = s; }
+        const Physics2DSettings& physics2DSettings() const { return m_physics; }
 
         // remove
         void removeEntity(EntityID id);
@@ -53,6 +69,8 @@ namespace HBE::Renderer {
 
     private:
         HBE::ECS::Registry m_reg;
+
+        Physics2DSettings m_physics{};
 
         // optional tile collision pointers (not owned)
         const TileMap* m_tileMap = nullptr;

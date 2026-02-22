@@ -67,24 +67,7 @@ namespace HBE::Renderer {
         auto& anim = m_reg.emplace<AnimationComponent2D>(id);
         anim.sm.sheet = sheet;
 
-        // Force an immediate UV apply so the sprite is visible on the first frame.
-        if (m_reg.has<SpriteComponent2D>(id)) {
-            auto& spr = m_reg.get<SpriteComponent2D>(id);
-
-            RenderItem tmp;
-            tmp.mesh = spr.mesh;
-            tmp.material = spr.material;
-            tmp.layer = spr.layer;
-            tmp.sortKey = spr.sortKey;
-            std::memcpy(tmp.uvRect, spr.uvRect, sizeof(tmp.uvRect));
-
-            // Update with dt=0 to latch first frame, then apply.
-            anim.sm.update(0.0f, {});
-            anim.sm.apply(tmp);
-
-            std::memcpy(spr.uvRect, tmp.uvRect, sizeof(spr.uvRect));
-        }
-
+        // Force UV rect to something visible immediately (first apply after update)
         return &anim.sm;
     }
 
@@ -133,46 +116,91 @@ namespace HBE::Renderer {
         }
 
         // -----------------------------
-        // 2) Physics + tile collision system
+        // 2) Physics + tile collision system (physics-lite)
         // -----------------------------
         const bool canTileCollide = (m_tileMap != nullptr && m_collisionLayer != nullptr);
 
-        for (auto e : m_reg.view<Transform2D, HBE::ECS::RigidBody2D>()) {
-            auto& tr = m_reg.get<Transform2D>(e);
+        // Frame-level bookkeeping
+        for (auto e : m_reg.view<HBE::ECS::RigidBody2D>()) {
             auto& rb = m_reg.get<HBE::ECS::RigidBody2D>(e);
+            rb.grounded = false;
 
-            if (rb.isStatic) continue;
-
-            // integrate acceleration -> velocity
-            rb.velX += rb.accelX * dt;
-            rb.velY += rb.accelY * dt;
-
-            rb.velX = applyDamping(rb.velX, rb.linearDamping, dt);
-            rb.velY = applyDamping(rb.velY, rb.linearDamping, dt);
-
-            const bool hasCollider = m_reg.has<HBE::ECS::Collider2D>(e);
-
-            if (canTileCollide && hasCollider) {
-                auto& col = m_reg.get<HBE::ECS::Collider2D>(e);
-
-                // build center-based AABB in world space
-                HBE::Renderer::AABB box;
-                box.w = col.halfW * 2.0f;
-                box.h = col.halfH * 2.0f;
-                box.cx = tr.posX + col.offsetX;
-                box.cy = tr.posY + col.offsetY;
-
-                // Move with collision resolution (updates box + velocities)
-                HBE::Renderer::TileCollision::moveAndCollide(*m_tileMap, *m_collisionLayer, box, rb.velX, rb.velY, dt);
-
-                // write back resolved position (undo collider offset)
-                tr.posX = box.cx - col.offsetX;
-                tr.posY = box.cy - col.offsetY;
+            if (rb.oneWayDisableTimer > 0.0f) {
+                rb.oneWayDisableTimer = std::max(0.0f, rb.oneWayDisableTimer - dt);
             }
-            else {
-                // simple Euler integrate
-                tr.posX += rb.velX * dt;
-                tr.posY += rb.velY * dt;
+        }
+
+        // Sub-stepping (stability)
+        int steps = 1;
+        float stepDt = dt;
+
+        if (m_physics.maxSubSteps > 0 && m_physics.maxStepDt > 0.0f) {
+            const int desired = (int)std::ceil(dt / m_physics.maxStepDt);
+            steps = std::clamp(desired, 1, m_physics.maxSubSteps);
+            stepDt = (steps > 0) ? (dt / (float)steps) : dt;
+        }
+
+        for (int step = 0; step < steps; ++step) {
+            for (auto e : m_reg.view<Transform2D, HBE::ECS::RigidBody2D>()) {
+                auto& tr = m_reg.get<Transform2D>(e);
+                auto& rb = m_reg.get<HBE::ECS::RigidBody2D>(e);
+
+                if (rb.isStatic) continue;
+
+                // integrate acceleration -> velocity
+                rb.velX += rb.accelX * stepDt;
+                rb.velY += rb.accelY * stepDt;
+
+                // gravity
+                if (rb.useGravity) {
+                    rb.velY += m_physics.gravityY * rb.gravityScale * stepDt;
+                }
+
+                if (rb.maxFallSpeed != 0.0f) {
+                    rb.velY = std::max(rb.velY, rb.maxFallSpeed);
+                }
+
+                rb.velX = applyDamping(rb.velX, rb.linearDamping, stepDt);
+                rb.velY = applyDamping(rb.velY, rb.linearDamping, stepDt);
+
+                const bool hasCollider = m_reg.has<HBE::ECS::Collider2D>(e);
+
+                if (canTileCollide && hasCollider) {
+                    auto& col = m_reg.get<HBE::ECS::Collider2D>(e);
+
+                    // build center-based AABB in world space
+                    HBE::Renderer::AABB box;
+                    box.w = col.halfW * 2.0f;
+                    box.h = col.halfH * 2.0f;
+                    box.cx = tr.posX + col.offsetX;
+                    box.cy = tr.posY + col.offsetY;
+
+                    const float prevBottom = box.cy - box.h * 0.5f;
+
+                    const bool allowOneWay = rb.enableOneWay && (rb.oneWayDisableTimer <= 0.0f);
+
+                    // Move with collision resolution (updates box + velocities)
+                    HBE::Renderer::MoveResult2D res =
+                        HBE::Renderer::TileCollision::moveAndCollideEx(
+                            *m_tileMap, *m_collisionLayer,
+                            box, rb.velX, rb.velY, stepDt,
+                            rb.maxStepUp,
+                            allowOneWay,
+                            rb.enableSlopes,
+                            prevBottom
+                        );
+
+                    if (res.grounded) rb.grounded = true;
+
+                    // write back resolved position (undo collider offset)
+                    tr.posX = box.cx - col.offsetX;
+                    tr.posY = box.cy - col.offsetY;
+                }
+                else {
+                    // simple Euler integrate
+                    tr.posX += rb.velX * stepDt;
+                    tr.posY += rb.velY * stepDt;
+                }
             }
         }
 
@@ -208,14 +236,10 @@ namespace HBE::Renderer {
 
             // Choose minimum penetration axis
             if (px < py) {
-                // If b is to the right of a (dx > 0), push a left (negative)
-                // If b is to the left of a (dx < 0), push a right (positive)
                 outDx = (dx < 0.0f) ? +px : -px;
                 outDy = 0.0f;
             }
             else {
-                // If b is above a (dy > 0), push a down (negative)
-                // If b is below a (dy < 0), push a up (positive)
                 outDx = 0.0f;
                 outDy = (dy < 0.0f) ? +py : -py;
             }
@@ -259,11 +283,9 @@ namespace HBE::Renderer {
 
                     if (!overlap(a, b, pushX, pushY)) continue;
 
-                    // Apply push-out to transform (note: transform is sprite center; collider has offset)
                     tr.posX += pushX;
                     tr.posY += pushY;
 
-                    // Kill velocity along the push axis
                     if (pushX != 0.0f) rb.velX = 0.0f;
                     if (pushY != 0.0f) rb.velY = 0.0f;
 
@@ -284,7 +306,6 @@ namespace HBE::Renderer {
             anim.update(dt, onAnimEvent);
 
             // Apply animation to UVs.
-            // SpriteAnimationStateMachine::apply currently targets RenderItem, so we adapt:
             RenderItem tmp;
             tmp.mesh = spr.mesh;
             tmp.material = spr.material;
@@ -294,23 +315,14 @@ namespace HBE::Renderer {
 
             anim.apply(tmp);
 
-            std::memcpy(spr.uvRect, tmp.uvRect, sizeof(spr.uvRect));
-        }
-
-        // -----------------------------
-        // 4) Keep sortKey in sync with transform (useful for y-sorting)
-        // -----------------------------
-        for (auto e : m_reg.view<Transform2D, SpriteComponent2D>()) {
-            auto& tr = m_reg.get<Transform2D>(e);
-            auto& spr = m_reg.get<SpriteComponent2D>(e);
-            spr.sortKey = tr.posY + spr.sortOffsetY;
+            std::memcpy(spr.uvRect, tmp.uvRect, sizeof(tmp.uvRect));
         }
     }
 
     void Scene2D::render(Renderer2D& renderer) {
         const Camera2D* cam = renderer.activeCamera();
 
-        // Camera view rect in world space (no per-entity pad here)
+        // Camera view rect in world space
         float viewL = -1e9f, viewR = 1e9f, viewB = -1e9f, viewT = 1e9f;
         bool canCull = false;
 
@@ -318,48 +330,31 @@ namespace HBE::Renderer {
             const float zoom = (cam->zoom > 0.0001f) ? cam->zoom : 0.0001f;
             const float halfW = 0.5f * cam->viewportWidth / zoom;
             const float halfH = 0.5f * cam->viewportHeight / zoom;
-            viewL = cam->x - halfW; viewR = cam->x + halfW;
-            viewB = cam->y - halfH; viewT = cam->y + halfH;
+
+            viewL = cam->x - halfW;
+            viewR = cam->x + halfW;
+            viewB = cam->y - halfH;
+            viewT = cam->y + halfH;
+
             canCull = true;
         }
 
-        // Build a list of pointers to sprites for sorting without pointer invalidation issues.
-        // We sort by (layer, sortKey).
-        struct DrawRef {
-            EntityID e;
-            int layer;
-            float sortKey;
-        };
-
-        std::vector<DrawRef> drawList;
-        drawList.reserve(1024);
-
         for (auto e : m_reg.view<Transform2D, SpriteComponent2D>()) {
-            const auto& tr = m_reg.get<Transform2D>(e);
-            const auto& spr = m_reg.get<SpriteComponent2D>(e);
+            auto& tr = m_reg.get<Transform2D>(e);
+            auto& spr = m_reg.get<SpriteComponent2D>(e);
 
+            // simple world-space AABB for sprite culling
             if (canCull) {
-                // very cheap cull using transform scale as AABB size
-                const float hw = 0.5f * std::fabs(tr.scaleX);
-                const float hh = 0.5f * std::fabs(tr.scaleY);
-                const float l = tr.posX - hw;
-                const float r = tr.posX + hw;
-                const float b = tr.posY - hh;
-                const float t = tr.posY + hh;
-                if (r < viewL || l > viewR || t < viewB || b > viewT) continue;
+                const float pad = 0.25f * std::max(std::fabs(tr.scaleX), std::fabs(tr.scaleY));
+
+                const float minX = tr.posX - 0.5f * std::fabs(tr.scaleX) - pad;
+                const float maxX = tr.posX + 0.5f * std::fabs(tr.scaleX) + pad;
+                const float minY = tr.posY - 0.5f * std::fabs(tr.scaleY) - pad;
+                const float maxY = tr.posY + 0.5f * std::fabs(tr.scaleY) + pad;
+
+                if (maxX < viewL || minX > viewR || maxY < viewB || minY > viewT)
+                    continue;
             }
-
-            drawList.push_back({ e, spr.layer, spr.sortKey });
-        }
-
-        std::sort(drawList.begin(), drawList.end(), [](const DrawRef& a, const DrawRef& b) {
-            if (a.layer != b.layer) return a.layer < b.layer;
-            return a.sortKey < b.sortKey;
-            });
-
-        for (const auto& d : drawList) {
-            auto& tr = m_reg.get<Transform2D>(d.e);
-            auto& spr = m_reg.get<SpriteComponent2D>(d.e);
 
             RenderItem item;
             item.transform = tr;

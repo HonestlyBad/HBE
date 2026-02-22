@@ -19,6 +19,7 @@
 #include <cmath>
 #include <vector>
 #include <string>
+
 #include <algorithm> // remove_if
 #include <utility>   // move
 
@@ -38,6 +39,12 @@ namespace {
     constexpr float GOBLIN_BODY_W_PX = 10.0f;
     constexpr float GOBLIN_BODY_H_PX = 14.0f;
     constexpr float GOBLIN_BODY_Y_OFFSET_PX = +0.5f;
+
+    static float Approach(float v, float target, float maxDelta) {
+        if (v < target) return std::min(v + maxDelta, target);
+        if (v > target) return std::max(v - maxDelta, target);
+        return target;
+    }
 }
 
 void GameLayer::onAttach(Application& app) {
@@ -90,6 +97,15 @@ void GameLayer::onAttach(Application& app) {
     // Hook Scene2D physics/collision to this tilemap layer
     m_scene.setTileCollisionContext(&m_tileMap, m_collisionLayer);
 
+    // Physics-lite tuning (gravity + substeps)
+    {
+        HBE::Renderer::Physics2DSettings phys{};
+        phys.gravityY = -1800.0f;         // world units / s^2 (negative = down)
+        phys.maxSubSteps = 4;             // stability
+        phys.maxStepDt = 1.0f / 120.0f;   // stability
+        m_scene.setPhysics2DSettings(phys);
+    }
+
     // -----------------------------
     // ECS: attach gameplay components + scripts
     // -----------------------------
@@ -112,46 +128,80 @@ void GameLayer::onAttach(Application& app) {
         rb.linearDamping = 0.0f;
         rb.isStatic = false;
 
+        // ---- PLATFORMER DEFAULTS ----
+        rb.useGravity = true;
+        rb.gravityScale = 1.0f;
+        rb.maxFallSpeed = -2200.0f; // clamp falling speed (negative down)
+
+        // Step-up a bit less than half a tile feels good
+        rb.maxStepUp = m_tileMap.worldTileH() * 0.35f;
+
+        rb.enableOneWay = true;
+        rb.enableSlopes = true;
+
         if (!reg.has<HBE::ECS::RigidBody2D>(m_soldierEntity))
             reg.emplace<HBE::ECS::RigidBody2D>(m_soldierEntity, rb);
 
         HBE::ECS::Script sc{};
         sc.name = "PlayerController";
         sc.onUpdate = [this](HBE::ECS::Entity e, float dt) {
-            (void)dt;
-
             auto& r = m_scene.registry();
             if (!r.has<HBE::ECS::RigidBody2D>(e) || !r.has<Transform2D>(e)) return;
 
             auto& body = r.get<HBE::ECS::RigidBody2D>(e);
 
-            const bool Up = Input::IsKeyDown(SDL_SCANCODE_W) || Input::IsKeyDown(SDL_SCANCODE_UP);
-            const bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
+            // -------- INPUT --------
             const bool Left = Input::IsKeyDown(SDL_SCANCODE_A) || Input::IsKeyDown(SDL_SCANCODE_LEFT);
             const bool Right = Input::IsKeyDown(SDL_SCANCODE_D) || Input::IsKeyDown(SDL_SCANCODE_RIGHT);
+            const bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
 
-            float moveX = 0.0f;
-            float moveY = 0.0f;
-            if (Up) moveY += 1.0f;
-            if (Down) moveY -= 1.0f;
-            if (Left) moveX -= 1.0f;
-            if (Right) moveX += 1.0f;
+            const bool JumpPressed = Input::IsKeyPressed(SDL_SCANCODE_SPACE);
+            const bool AttackPressed = Input::IsKeyPressed(SDL_SCANCODE_RETURN);
 
-            if (moveX != 0.0f || moveY != 0.0f) {
-                const float len = std::sqrt(moveX * moveX + moveY * moveY);
-                if (len > 0.0f) { moveX /= len; moveY /= len; }
+            float inputX = 0.0f;
+            if (Left)  inputX -= 1.0f;
+            if (Right) inputX += 1.0f;
+
+            // -------- TUNING --------
+            const float moveSpeed = 520.0f;   // max run speed
+            const float accelGround = 5200.0f;  // reach speed quickly on ground
+            const float accelAir = 3200.0f;  // air control
+            const float friction = 6200.0f;  // ground stop when no input
+            const float jumpVel = 780.0f;   // initial jump velocity (up)
+
+            // We let Scene2D apply gravity; don't fight it
+            body.accelY = 0.0f;
+
+            // Horizontal movement: accelerate toward target velocity
+            const float targetVX = inputX * moveSpeed;
+            const float ax = body.grounded ? accelGround : accelAir;
+
+            if (inputX != 0.0f) {
+                body.velX = Approach(body.velX, targetVX, ax * dt);
+            }
+            else if (body.grounded) {
+                body.velX = Approach(body.velX, 0.0f, friction * dt);
             }
 
-            const float speed = 300.0f;
-            body.velX = moveX * speed;
-            body.velY = moveY * speed;
+            // Jump (only if grounded)
+            if (JumpPressed && body.grounded && !Down) {
+                body.velY = jumpVel;
+                body.grounded = false;
+            }
 
-            const bool isMoving = (moveX != 0.0f || moveY != 0.0f);
+            // Drop-through one-way: hold Down + press Jump
+            if (JumpPressed && Down) {
+                body.oneWayDisableTimer = 0.20f; // seconds
+                body.velY = std::min(body.velY, -120.0f); // nudge down
+                body.grounded = false;
+            }
 
+            // Anim parameters
             if (auto* sAnim = m_scene.getSpriteAnimator(e)) {
-                sAnim->setBool("moving", isMoving);
+                const bool moving = (std::fabs(body.velX) > 5.0f);
+                sAnim->setBool("moving", moving);
 
-                if (Input::IsKeyPressed(SDL_SCANCODE_SPACE)) {
+                if (AttackPressed) {
                     sAnim->trigger("attack");
                 }
             }
