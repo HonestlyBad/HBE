@@ -3,6 +3,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <cctype>
 #include <json.hpp>
 
 using json = nlohmann::json;
@@ -60,9 +61,65 @@ namespace HBE::Renderer {
             t.margin = ts.value("margin", 0);
             t.spacing = ts.value("spacing", 0);
 
-            if (ts.contains("solidTiles")) {
+            // Solid tiles (array of tile IDs)
+            if (ts.contains("solidTiles") && ts["solidTiles"].is_array()) {
                 for (auto& v : ts["solidTiles"])
                     t.solidTiles.insert((int)v);
+            }
+
+            // One-way platform tiles (array of tile IDs)
+            if (ts.contains("oneWayTiles") && ts["oneWayTiles"].is_array()) {
+                for (auto& v : ts["oneWayTiles"])
+                    t.oneWayTiles.insert((int)v);
+            }
+
+            // Slopes:
+            // Supported JSON shapes:
+            // 1) "slopes": { "12": "left", "13": "right" }
+            // 2) "slopes": [ { "id": 12, "type": "left" }, ... ]
+            if (ts.contains("slopes")) {
+                auto parseSlopeType = [](const std::string& s) -> SlopeType {
+                    std::string t = s;
+                    for (auto& c : t) c = (char)std::tolower(c);
+                    if (t == "left" || t == "leftup" || t == "/" || t == "lu") return SlopeType::LeftUp;
+                    if (t == "right" || t == "rightup" || t == "\\" || t == "ru") return SlopeType::RightUp;
+                    return SlopeType::None;
+                    };
+
+                const auto& slopes = ts["slopes"];
+                if (slopes.is_object()) {
+                    for (auto it = slopes.begin(); it != slopes.end(); ++it) {
+                        int id = 0;
+                        try { id = std::stoi(it.key()); }
+                        catch (...) { continue; }
+
+                        if (it.value().is_number_integer()) {
+                            int v = (int)it.value();
+                            if (v == 1) t.slopes[id] = SlopeType::LeftUp;
+                            else if (v == 2) t.slopes[id] = SlopeType::RightUp;
+                        }
+                        else if (it.value().is_string()) {
+                            SlopeType st = parseSlopeType((std::string)it.value());
+                            if (st != SlopeType::None) t.slopes[id] = st;
+                        }
+                    }
+                }
+                else if (slopes.is_array()) {
+                    for (auto& s : slopes) {
+                        int id = s.value("id", 0);
+                        if (id <= 0) continue;
+
+                        if (s.contains("type") && s["type"].is_string()) {
+                            SlopeType st = parseSlopeType(s.value("type", ""));
+                            if (st != SlopeType::None) t.slopes[id] = st;
+                        }
+                        else if (s.contains("type") && s["type"].is_number_integer()) {
+                            int v = s["type"];
+                            if (v == 1) t.slopes[id] = SlopeType::LeftUp;
+                            else if (v == 2) t.slopes[id] = SlopeType::RightUp;
+                        }
+                    }
+                }
             }
 
             map.tilesets.push_back(std::move(t));

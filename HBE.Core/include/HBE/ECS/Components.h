@@ -16,26 +16,40 @@ namespace HBE::ECS {
 		bool isTrigger = false;
 	};
 
-	// Simple rigidbody (2D)
+	// Lightweight rigidbody (2D).
 	struct RigidBody2D {
+		// Linear velocity
 		float velX = 0.0f;
 		float velY = 0.0f;
-		
+
+		// Linear acceleration (set by controllers, AI, etc.)
 		float accelX = 0.0f;
 		float accelY = 0.0f;
+		float linearDamping = 0.0f;
 
-		float linearDamping = 0.0f; // 0 = none
 		bool isStatic = false;
+
+		// --- Platformer helpers (optional) ---
+		bool useGravity = false;
+		float gravityScale = 1.0f;
+
+		bool grounded = false;
+
+		float maxStepUp = 0.0f;
+
+		bool enableOneWay = true;
+		float oneWayDisableTimer = 0.0f;
+
+		bool enableSlopes = true;
+
+		float maxFallSpeed = 0.0f;
 	};
 
 	// script hook
 	struct Script {
 		std::string name;
 
-		// Called once after attaching script to an entity (optional)
 		std::function<void(Entity)> onCreate;
-
-		// Called every frame (optional)
 		std::function<void(Entity, float)> onUpdate;
 	};
 }

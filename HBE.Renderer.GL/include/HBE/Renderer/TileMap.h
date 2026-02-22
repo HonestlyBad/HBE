@@ -2,8 +2,17 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace HBE::Renderer {
+
+    enum class SlopeType : uint8_t {
+        None = 0,
+        // rises left -> right ( / )
+        LeftUp = 1,
+        // rises right -> left ( \ )
+        RightUp = 2,
+    };
 
     struct TileMapTileset {
         std::string name;
@@ -16,6 +25,16 @@ namespace HBE::Renderer {
 
         // Tile IDs that are solid (1-based IDs)
         std::unordered_set<int> solidTiles;
+        std::unordered_set<int> oneWayTiles;
+        std::unordered_map<int, SlopeType> slopes;
+
+        bool isSolid(int tileId) const { return solidTiles.count(tileId) > 0; }
+        bool isOneWay(int tileId) const { return oneWayTiles.count(tileId) > 0; }
+
+        SlopeType slopeType(int tileId) const {
+            auto it = slopes.find(tileId);
+            return (it == slopes.end()) ? SlopeType::None : it->second;
+        }
     };
 
     struct TileMapLayer {
