@@ -5,6 +5,7 @@
 #include "HBE/Core/Event.h"
 
 #include "HBE/Platform/Input.h"
+#include "HBE/Input/InputMap.h"
 
 #include "HBE/Renderer/GLShader.h"
 #include "HBE/Renderer/Renderer2D.h"
@@ -40,15 +41,77 @@ namespace {
     constexpr float GOBLIN_BODY_H_PX = 14.0f;
     constexpr float GOBLIN_BODY_Y_OFFSET_PX = +0.5f;
 
+    // Where user overrides live (next to exe while developing)
+    constexpr const char* BINDINGS_FILE = "bindings.cfg";
+
     static float Approach(float v, float target, float maxDelta) {
         if (v < target) return std::min(v + maxDelta, target);
         if (v > target) return std::max(v - maxDelta, target);
         return target;
     }
+
+    // Game-owned default bindings (engine stays universal).
+    static void RegisterDefaultBindings(HBE::Input::InputMap& map)
+    {
+        using namespace HBE::Input;
+
+        // --- Actions ---
+        map.bindAction(Action::Jump, Binding::Key(SDL_SCANCODE_SPACE), true);
+        map.bindAction(Action::Jump, Binding::GamepadButton(SDL_GAMEPAD_BUTTON_SOUTH), false);
+
+        // Attack default: E on keyboard, X/Square on controller
+        map.bindAction(Action::Attack, Binding::Key(SDL_SCANCODE_E), true);
+        map.bindAction(Action::Attack, Binding::GamepadButton(SDL_GAMEPAD_BUTTON_WEST), false);
+
+        map.bindAction(Action::UIConfirm, Binding::Key(SDL_SCANCODE_RETURN), true);
+        map.bindAction(Action::UIConfirm, Binding::GamepadButton(SDL_GAMEPAD_BUTTON_SOUTH), false);
+
+        map.bindAction(Action::UICancel, Binding::Key(SDL_SCANCODE_ESCAPE), true);
+        map.bindAction(Action::UICancel, Binding::GamepadButton(SDL_GAMEPAD_BUTTON_EAST), false);
+
+        map.bindAction(Action::Pause, Binding::Key(SDL_SCANCODE_ESCAPE), true);
+        map.bindAction(Action::Pause, Binding::GamepadButton(SDL_GAMEPAD_BUTTON_START), false);
+
+        map.bindAction(Action::FullscreenToggle, Binding::Key(SDL_SCANCODE_F11), true);
+        map.bindAction(Action::FullscreenToggle, Binding::None(), false);
+
+        // --- Axes ---
+        AxisBinding moveX{};
+        moveX.negative = Binding::Key(SDL_SCANCODE_A);
+        moveX.positive = Binding::Key(SDL_SCANCODE_D);
+        moveX.negative2 = Binding::Key(SDL_SCANCODE_LEFT);
+        moveX.positive2 = Binding::Key(SDL_SCANCODE_RIGHT);
+        moveX.useGamepadAxis = true;
+        moveX.gamepadAxis = SDL_GAMEPAD_AXIS_LEFTX;
+        moveX.deadzone = 0.20f;
+        moveX.invert = false;
+        moveX.scale = 1.0f;
+        map.bindAxis(Axis::MoveX, moveX);
+
+        AxisBinding moveY{};
+        moveY.negative = Binding::Key(SDL_SCANCODE_W); // up
+        moveY.positive = Binding::Key(SDL_SCANCODE_S); // down
+        moveY.negative2 = Binding::Key(SDL_SCANCODE_UP);
+        moveY.positive2 = Binding::Key(SDL_SCANCODE_DOWN);
+        moveY.useGamepadAxis = true;
+        moveY.gamepadAxis = SDL_GAMEPAD_AXIS_LEFTY;
+        moveY.deadzone = 0.20f;
+        moveY.invert = false;
+        moveY.scale = 1.0f;
+        map.bindAxis(Axis::MoveY, moveY);
+    }
 }
 
 void GameLayer::onAttach(Application& app) {
     m_app = &app;
+
+    // ------------------------------------------------------------
+    // Input Mapping Layer:
+    // - Game defines defaults here
+    // - Player overrides loaded from bindings.cfg
+    // ------------------------------------------------------------
+    HBE::Input::Initialize(&RegisterDefaultBindings);
+    HBE::Input::Get().loadFromFile(BINDINGS_FILE); // safe if missing (returns false)
 
     // camera setup (logical resolution)
     m_camera.x = std::round(m_camera.x);
@@ -150,24 +213,21 @@ void GameLayer::onAttach(Application& app) {
 
             auto& body = r.get<HBE::ECS::RigidBody2D>(e);
 
-            // -------- INPUT --------
-            const bool Left = Input::IsKeyDown(SDL_SCANCODE_A) || Input::IsKeyDown(SDL_SCANCODE_LEFT);
-            const bool Right = Input::IsKeyDown(SDL_SCANCODE_D) || Input::IsKeyDown(SDL_SCANCODE_RIGHT);
-            const bool Down = Input::IsKeyDown(SDL_SCANCODE_S) || Input::IsKeyDown(SDL_SCANCODE_DOWN);
+            // -------- INPUT (mapped) --------
+            const float inputX = HBE::Input::AxisValue(HBE::Input::Axis::MoveX);
+            const float inputY = HBE::Input::AxisValue(HBE::Input::Axis::MoveY); // if you want it later
 
-            const bool JumpPressed = Input::IsKeyPressed(SDL_SCANCODE_SPACE);
-            const bool AttackPressed = Input::IsKeyPressed(SDL_SCANCODE_RETURN);
+            const bool Down = (inputY > 0.5f); // keeps your old "Down" behavior if you need it
 
-            float inputX = 0.0f;
-            if (Left)  inputX -= 1.0f;
-            if (Right) inputX += 1.0f;
+            const bool JumpPressed = HBE::Input::ActionPressed(HBE::Input::Action::Jump);
+            const bool AttackPressed = HBE::Input::ActionPressed(HBE::Input::Action::Attack);
 
             // -------- TUNING --------
-            const float moveSpeed = 520.0f;   // max run speed
+            const float moveSpeed = 520.0f;     // max run speed
             const float accelGround = 5200.0f;  // reach speed quickly on ground
-            const float accelAir = 3200.0f;  // air control
-            const float friction = 6200.0f;  // ground stop when no input
-            const float jumpVel = 780.0f;   // initial jump velocity (up)
+            const float accelAir = 3200.0f;     // air control
+            const float friction = 6200.0f;     // ground stop when no input
+            const float jumpVel = 780.0f;       // initial jump velocity (up)
 
             // We let Scene2D apply gravity; don't fight it
             body.accelY = 0.0f;
@@ -231,14 +291,14 @@ void GameLayer::onAttach(Application& app) {
         if (!reg.has<HBE::ECS::RigidBody2D>(m_goblinEntity))
             reg.emplace<HBE::ECS::RigidBody2D>(m_goblinEntity, rb);
 
-        // Goblin test script (Enter = attack)
+        // Goblin test script (mapped UIConfirm = Enter / A)
         HBE::ECS::Script sc{};
         sc.name = "GoblinTest";
         sc.onUpdate = [this](HBE::ECS::Entity e, float dt) {
             (void)dt;
             if (auto* gAnim = m_scene.getSpriteAnimator(e)) {
                 gAnim->setBool("moving", false);
-                if (Input::IsKeyPressed(SDL_SCANCODE_RETURN)) {
+                if (HBE::Input::ActionPressed(HBE::Input::Action::UIConfirm)) {
                     gAnim->trigger("attack");
                 }
             }
@@ -456,7 +516,7 @@ void GameLayer::buildSpritePipeline() {
 
 void GameLayer::onUpdate(float dt) {
     // fullscreen toggle stays in layer for now
-    if (HBE::Platform::Input::IsKeyPressed(SDL_SCANCODE_F11)) {
+    if (HBE::Input::ActionPressed(HBE::Input::Action::FullscreenToggle)) {
         // (left blank like your current file)
     }
 

@@ -4,6 +4,7 @@
 #include "HBE/Core/Time.h"
 #include "HBE/Core/Event.h"
 #include "HBE/Platform/Input.h"
+#include "HBE/Input/InputMap.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_scancode.h>
@@ -85,8 +86,8 @@ namespace HBE::Core {
 		// but our ComputeLetterboxViewport gave us vpY in window pixels from bottom.
 		// We need a consistent convention.
 
-// Fix the convention: our viewport rect is in OpenGL coordinates (origin bottom-left).
-// SDL mouse events are top-left origin. Convert screenY to bottom-left origin:
+		// Fix the convention: our viewport rect is in OpenGL coordinates (origin bottom-left).
+		// SDL mouse events are top-left origin. Convert screenY to bottom-left origin:
 		const int screenY_fromBottom = m_winH - 1 - screenY;
 
 		// Check inside viewport rect (in bottom-left origin space)
@@ -142,8 +143,11 @@ namespace HBE::Core {
 		// Always feed Input first
 		HBE::Platform::Input::HandleEvent(e);
 
+		// Feed mapping layer too (rebinding capture). Safe if never initialized.
+		HBE::Input::HandleEvent(e);
+
 		switch (e.type) {
-		// -------- Keyboard Events ----------
+			// -------- Keyboard Events ----------
 		case SDL_EVENT_KEY_DOWN: {
 			const int sc = static_cast<int>(e.key.scancode);
 			const bool repeat = (e.key.repeat != 0);
@@ -162,14 +166,14 @@ namespace HBE::Core {
 			}
 			break;
 		}
-		// -------- Window Resize Events ----------
-		// SDL3 has multiple size-related events. These are the ones you’ll commonly see.
+							   // -------- Window Resize Events ----------
+							   // SDL3 has multiple size-related events. These are the ones you’ll commonly see.
 		case SDL_EVENT_WINDOW_RESIZED:
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
 			recalcViewportAndNotify();
 			break;
 		}
-		// -------- Mouse Events ----------
+												// -------- Mouse Events ----------
 		case SDL_EVENT_MOUSE_MOTION: {
 			// window coords (top-left origin)
 			const float mx = e.motion.x;
@@ -284,6 +288,9 @@ namespace HBE::Core {
 
 		while (m_running) {
 			HBE::Platform::Input::NewFrame();
+
+			// mapping layer needs per-frame update too (edge detection for axis-threshold)
+			HBE::Input::NewFrame();
 
 			// Pump SDL events through platform
 			bool quit = m_platform.pumpEvents([this](const SDL_Event& e) {

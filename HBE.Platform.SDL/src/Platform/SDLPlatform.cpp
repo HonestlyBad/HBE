@@ -24,7 +24,7 @@ namespace HBE::Platform {
 
         SDL_ClearError();
 
-        int rc = SDL_Init(SDL_INIT_VIDEO);
+        int rc = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
 
         // SDL_Init: 0 = success, <0 = error, >0 = already initialized
         if (rc < 0) {
