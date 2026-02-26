@@ -63,6 +63,9 @@ namespace HBE::Renderer {
         // render all active entities
         void render(Renderer2D& renderer);
 
+        // Clear all entities/components from the scene
+        void clear();
+
         // Expose registry if you want to go full ECS later (optional but useful)
         HBE::ECS::Registry& registry() { return m_reg; }
         const HBE::ECS::Registry& registry() const { return m_reg; }
