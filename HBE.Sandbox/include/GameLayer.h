@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HBE/Core/Layer.h"
+#include "HBE/Core/FileWatcher.h"
 
 #include "HBE/Renderer/Camera2D.h"
 #include "HBE/Renderer/Scene2D.h"
@@ -24,21 +25,21 @@ public:
 	void onAttach(HBE::Core::Application& app) override;
 	void onUpdate(float dt) override;
 	void onRender() override;
+
 	HBE::Renderer::DebugDraw2D m_debug{};
 	HBE::Renderer::TextRenderer2D m_text{};
 
 	// --- stats (FPS/UPS) ---
-	double m_statTimer = 0.0;  // seconds accumulated
-	int    m_frameCount = 0;   // frames rendered in window
-	int    m_updateCount = 0;  // updates in window
+	double m_statTimer = 0.0;
+	int    m_frameCount = 0;
+	int    m_updateCount = 0;
 	float  m_fps = 0.0f;
 	float  m_ups = 0.0f;
-	float m_lastDt = 0.016f;
+	float  m_lastDt = 0.016f;
 
-	// slider
 	float m_volume = 0.75f;
 	float m_brightness = 1.0f;
-	int m_statBars = 5;
+	int   m_statBars = 5;
 
 	float m_uiAnimT = 0.0f;
 
@@ -49,6 +50,13 @@ public:
 
 private:
 	HBE::Renderer::UI::UIContext m_ui{};
+	HBE::Core::FileWatcher m_watcher{};
+
+	// Hot reload targets (relative to working directory)
+	std::string m_tileMapPath = "assets/maps/test_map.json";
+	std::string m_uiThemePath = "assets/ui/theme.json";
+	std::string m_spriteVsPath = "assets/shaders/sprite.vert";
+	std::string m_spriteFsPath = "assets/shaders/sprite.frag";
 
 	struct DebugPopup {
 		std::string text;
@@ -56,30 +64,27 @@ private:
 		float y = 0.0f;
 		HBE::Renderer::Color4 color{ 1,1,1,1 };
 
-		float life = 0.0f; // seconds remaining
-		float maxLife = 0.0f; // seconds total
+		float life = 0.0f;
+		float maxLife = 0.0f;
 		float floatSpeed = 0.0f;
 	};
 
 	std::vector<DebugPopup> m_popups;
-	void spawnPopup(float x, float y, const std::string& text, const HBE::Renderer::Color4& color, float lifetimeSeconds = 1.0f, float floatUpSpeed = 30.0f);
+	void spawnPopup(float x, float y, const std::string& text, const HBE::Renderer::Color4& color,
+		float lifetimeSeconds = 1.0f, float floatUpSpeed = 30.0f);
 
 	HBE::Core::Application* m_app = nullptr;
 
-	// Logical area
 	static constexpr float LOGICAL_WIDTH = 1280.0f;
 	static constexpr float LOGICAL_HEIGHT = 720.0f;
 
-	// renderer side
 	HBE::Renderer::Camera2D m_camera{};
 	HBE::Renderer::Scene2D m_scene{};
 
-	// tilemap
 	HBE::Renderer::TileMap m_tileMap{};
 	HBE::Renderer::TileMapRenderer m_tileRenderer{};
 	const HBE::Renderer::TileMapLayer* m_collisionLayer = nullptr;
 
-	// resources
 	HBE::Renderer::GLShader* m_spriteShader = nullptr;
 	HBE::Renderer::Mesh* m_quadMesh = nullptr;
 
@@ -92,5 +97,12 @@ private:
 	HBE::Renderer::EntityID m_goblinEntity = HBE::Renderer::InvalidEntityID;
 	HBE::Renderer::EntityID m_soldierEntity = HBE::Renderer::InvalidEntityID;
 
-	void buildSpritePipeline(); // shader + quad mesh + texture + entity
+	void buildSpritePipeline();
+
+	// Hot reload handlers
+	void setupHotReloadWatches();
+	void hotReloadShader();
+	void hotReloadTileMap();
+	void hotReloadUITheme();
+	void hotReloadTextureByPath(const std::string& path);
 };
