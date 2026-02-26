@@ -14,9 +14,10 @@
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Transform2D.h"
 #include "HBE/Renderer/UI/UIThemeLoader.h"
-
 #include "HBE/Renderer/TileMapLoader.h"
 
+#include "HBE/Renderer/SceneSerializer.h"
+#include "HBE/ECS/RuntimeComponents.h" // IDComponent, TagComponent
 #include "HBE/ECS/Components.h"
 
 #include <SDL3/SDL_scancode.h>
@@ -49,6 +50,9 @@ namespace {
 
     // Where user overrides live (next to exe while developing)
     constexpr const char* BINDINGS_FILE = "bindings.cfg";
+
+    // Scene serialization file (relative to HBE.Sandbox CWD)
+    constexpr const char* SCENE_PATH = "assets/scenes/sandbox.scene.json";
 
     static float Approach(float v, float target, float maxDelta) {
         if (v < target) return std::min(v + maxDelta, target);
@@ -106,16 +110,26 @@ namespace {
         moveY.scale = 1.0f;
         map.bindAxis(Axis::MoveY, moveY);
     }
+
+    // NOTE:
+    // If your Platform::Input API uses a different function name, adjust these two calls:
+    // - Input::keyPressed(SDL_SCANCODE_F5)
+    // - Input::keyPressed(SDL_SCANCODE_F9)
+    //
+    // Some codebases use Input::isKeyPressed or Input::getKeyDown etc.
+    static bool KeyPressed(SDL_Scancode sc) {
+        return HBE::Platform::Input::IsKeyPressed(sc);
+    }
 }
 
 void GameLayer::onAttach(Application& app) {
     m_app = &app;
 
-    // Ensure hot-reload paths are set (IMPORTANT: avoids empty-string watches if header defaults differ)
-    m_tileMapPath = "assets/maps/test_map.json";
-    m_uiThemePath = "assets/ui/theme.json";
-    m_spriteVsPath = "assets/shaders/sprite.vert";
-    m_spriteFsPath = "assets/shaders/sprite.frag";
+    // Ensure paths are initialized (prevents empty-string watches if header defaults differ)
+    if (m_tileMapPath.empty())  m_tileMapPath = "assets/maps/test_map.json";
+    if (m_uiThemePath.empty())  m_uiThemePath = "assets/ui/theme.json";
+    if (m_spriteVsPath.empty()) m_spriteVsPath = "assets/shaders/sprite.vert";
+    if (m_spriteFsPath.empty()) m_spriteFsPath = "assets/shaders/sprite.frag";
 
     // ------------------------------------------------------------
     // Input Mapping Layer:
@@ -141,7 +155,6 @@ void GameLayer::onAttach(Application& app) {
 
     buildSpritePipeline();
 
-    // Default UI style (theme.json can override)
     HBE::Renderer::UI::UIStyle style;
     style.textScale = 1.0f;
     style.itemH = 34.0f;
@@ -165,7 +178,7 @@ void GameLayer::onAttach(Application& app) {
     }
 
     setupHotReloadWatches();
-    hotReloadUITheme(); // apply theme at startup (optional)
+    hotReloadUITheme(); // apply theme at startup (optional, but nice)
 
     // choose collision layer by name
     m_collisionLayer = m_tileMap.findLayer("Ground");
@@ -192,6 +205,16 @@ void GameLayer::onAttach(Application& app) {
     // -----------------------------
     auto& reg = m_scene.registry();
 
+    // Tag your initial entities (helps scene save find “Player”/“Goblin”)
+    if (reg.valid(m_soldierEntity)) {
+        if (!reg.has<HBE::ECS::TagComponent>(m_soldierEntity))
+            reg.emplace<HBE::ECS::TagComponent>(m_soldierEntity, HBE::ECS::TagComponent{ "Player" });
+    }
+    if (reg.valid(m_goblinEntity)) {
+        if (!reg.has<HBE::ECS::TagComponent>(m_goblinEntity))
+            reg.emplace<HBE::ECS::TagComponent>(m_goblinEntity, HBE::ECS::TagComponent{ "Goblin" });
+    }
+
     // Player (soldier): Collider + Rigidbody + Script controller
     if (reg.valid(m_soldierEntity)) {
         const float pxScale = SPRITE_PIXEL_SCALE;
@@ -213,10 +236,7 @@ void GameLayer::onAttach(Application& app) {
         rb.useGravity = true;
         rb.gravityScale = 1.0f;
         rb.maxFallSpeed = -2200.0f; // clamp falling speed (negative down)
-
-        // Step-up a bit less than half a tile feels good
         rb.maxStepUp = m_tileMap.worldTileH() * 0.35f;
-
         rb.enableOneWay = true;
         rb.enableSlopes = true;
 
@@ -240,16 +260,14 @@ void GameLayer::onAttach(Application& app) {
             const bool AttackPressed = HBE::Input::ActionPressed(HBE::Input::Action::Attack);
 
             // -------- TUNING --------
-            const float moveSpeed = 520.0f;     // max run speed
-            const float accelGround = 5200.0f;  // reach speed quickly on ground
-            const float accelAir = 3200.0f;     // air control
-            const float friction = 6200.0f;     // ground stop when no input
-            const float jumpVel = 780.0f;       // initial jump velocity (up)
+            const float moveSpeed = 520.0f;
+            const float accelGround = 5200.0f;
+            const float accelAir = 3200.0f;
+            const float friction = 6200.0f;
+            const float jumpVel = 780.0f;
 
-            // We let Scene2D apply gravity; don't fight it
             body.accelY = 0.0f;
 
-            // Horizontal movement: accelerate toward target velocity
             const float targetVX = inputX * moveSpeed;
             const float ax = body.grounded ? accelGround : accelAir;
 
@@ -260,20 +278,17 @@ void GameLayer::onAttach(Application& app) {
                 body.velX = Approach(body.velX, 0.0f, friction * dt);
             }
 
-            // Jump (only if grounded)
             if (JumpPressed && body.grounded && !Down) {
                 body.velY = jumpVel;
                 body.grounded = false;
             }
 
-            // Drop-through one-way: hold Down + press Jump
             if (JumpPressed && Down) {
-                body.oneWayDisableTimer = 0.20f; // seconds
-                body.velY = std::min(body.velY, -120.0f); // nudge down
+                body.oneWayDisableTimer = 0.20f;
+                body.velY = std::min(body.velY, -120.0f);
                 body.grounded = false;
             }
 
-            // Anim parameters
             if (auto* sAnim = m_scene.getSpriteAnimator(e)) {
                 const bool moving = (std::fabs(body.velX) > 5.0f);
                 sAnim->setBool("moving", moving);
@@ -302,13 +317,12 @@ void GameLayer::onAttach(Application& app) {
             reg.emplace<HBE::ECS::Collider2D>(m_goblinEntity, col);
 
         HBE::ECS::RigidBody2D rb{};
-        rb.isStatic = true;     // IMPORTANT: stays put, acts like a blocker
+        rb.isStatic = true;
         rb.linearDamping = 0.0f;
 
         if (!reg.has<HBE::ECS::RigidBody2D>(m_goblinEntity))
             reg.emplace<HBE::ECS::RigidBody2D>(m_goblinEntity, rb);
 
-        // Goblin test script (mapped UIConfirm = Enter / A)
         HBE::ECS::Script sc{};
         sc.name = "GoblinTest";
         sc.onUpdate = [this](HBE::ECS::Entity e, float dt) {
@@ -331,10 +345,9 @@ void GameLayer::onAttach(Application& app) {
 void GameLayer::buildSpritePipeline() {
     auto& resources = m_app->resources();
 
-    // File-backed shader (hot reload friendly)
     m_spriteShader = resources.getOrCreateShaderFromFiles("sprite", m_spriteVsPath, m_spriteFsPath);
 
-    // Fallback (only if files missing / failed)
+    // Fallback (only if files missing)
     if (!m_spriteShader) {
         const char* spriteVs = R"(#version 330 core
 layout(location = 0) in vec3 aPos;
@@ -384,7 +397,7 @@ void main() {
         }
     }
 
-    // quad mesh (pos + uv) as 2 triangles (6 verts)
+    // quad mesh (pos + uv) as 2 triangles (6 verts) for the current Mesh API
     std::vector<float> quadVerts = {
         // tri 1
         -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
@@ -466,7 +479,7 @@ void main() {
     goblin.transform.posY = 95.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-    goblin.layer = 100;
+    goblin.layer = 100; // base entity layer
     goblin.sortKey = goblin.transform.posY;
 
     RenderItem soldier{};
@@ -476,7 +489,9 @@ void main() {
     soldier.transform.posY = 95.0f;
     soldier.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     soldier.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-    soldier.layer = 200; // render above goblin
+
+    // Make player render above goblin:
+    soldier.layer = 200;
     soldier.sortKey = soldier.transform.posY;
 
     SpriteRenderer2D::setFrame(goblin, m_goblinSheet, 0, 0);
@@ -548,11 +563,211 @@ void GameLayer::onUpdate(float dt) {
 
     if (m_statTimer >= 0.5) {
         const double window = m_statTimer;
+
         m_fps = (float)((double)m_frameCount / window);
         m_ups = (float)((double)m_updateCount / window);
+
         m_frameCount = 0;
         m_updateCount = 0;
         m_statTimer = 0.0;
+    }
+
+    // -------------------------
+    // Scene Save/Load hotkeys
+    // -------------------------
+    // NOTE: adjust KeyPressed() mapping if your Platform::Input uses different names.
+    if (KeyPressed(SDL_SCANCODE_F5)) {
+        std::string err;
+
+        HBE::Renderer::SceneSaveCallbacks saveCb{};
+        saveCb.meshKey = [this](const HBE::Renderer::Mesh* m) -> std::string {
+            if (m == m_quadMesh) return "quad";
+            return "";
+            };
+        saveCb.materialKey = [this](const HBE::Renderer::Material* mat) -> std::string {
+            if (mat == &m_goblinMaterial) return "goblin_mat";
+            if (mat == &m_soldierMaterial) return "soldier_mat";
+            return "";
+            };
+        saveCb.sheetKey = [this](const HBE::Renderer::SpriteRenderer2D::SpriteSheetHandle* sh) -> std::string {
+            if (sh == &m_goblinSheet) return "orc_sheet";
+            if (sh == &m_soldierSheet) return "soldier_sheet";
+            return "";
+            };
+
+        const bool ok = HBE::Renderer::SceneSerializer::saveToFile(
+            m_scene, SCENE_PATH, saveCb, m_tileMapPath, &err);
+
+        if (ok) LogInfo(std::string("Scene saved: ") + SCENE_PATH);
+        else    LogError("Scene save FAILED: " + err);
+    }
+
+    if (KeyPressed(SDL_SCANCODE_F9)) {
+        std::string tilemapPath;
+        std::string err;
+
+        HBE::Renderer::SceneLoadCallbacks loadCb{};
+        loadCb.mesh = [this](const std::string& key) -> HBE::Renderer::Mesh* {
+            if (key == "quad") return m_quadMesh;
+            return nullptr;
+            };
+        loadCb.material = [this](const std::string& key) -> HBE::Renderer::Material* {
+            if (key == "goblin_mat") return &m_goblinMaterial;
+            if (key == "soldier_mat") return &m_soldierMaterial;
+            return nullptr;
+            };
+        loadCb.sheet = [this](const std::string& key) -> const HBE::Renderer::SpriteRenderer2D::SpriteSheetHandle* {
+            if (key == "orc_sheet") return &m_goblinSheet;
+            if (key == "soldier_sheet") return &m_soldierSheet;
+            return nullptr;
+            };
+
+        // Bind scripts by name (re-attach lambdas after loading)
+        loadCb.bindScript = [this](HBE::ECS::Entity e, const std::string& name, HBE::Renderer::Scene2D& scene) {
+            auto& reg = scene.registry();
+            if (!reg.has<HBE::ECS::Script>(e)) return;
+
+            auto& sc = reg.get<HBE::ECS::Script>(e);
+            sc.name = name;
+
+            if (name == "PlayerController") {
+                sc.onUpdate = [this](HBE::ECS::Entity ent, float dt) {
+                    auto& r = m_scene.registry();
+                    if (!r.has<HBE::ECS::RigidBody2D>(ent) || !r.has<Transform2D>(ent)) return;
+
+                    auto& body = r.get<HBE::ECS::RigidBody2D>(ent);
+
+                    const float inputX = HBE::Input::AxisValue(HBE::Input::Axis::MoveX);
+                    const float inputY = HBE::Input::AxisValue(HBE::Input::Axis::MoveY);
+
+                    const bool Down = (inputY > 0.5f);
+                    const bool JumpPressed = HBE::Input::ActionPressed(HBE::Input::Action::Jump);
+                    const bool AttackPressed = HBE::Input::ActionPressed(HBE::Input::Action::Attack);
+
+                    const float moveSpeed = 520.0f;
+                    const float accelGround = 5200.0f;
+                    const float accelAir = 3200.0f;
+                    const float friction = 6200.0f;
+                    const float jumpVel = 780.0f;
+
+                    body.accelY = 0.0f;
+
+                    const float targetVX = inputX * moveSpeed;
+                    const float ax = body.grounded ? accelGround : accelAir;
+
+                    if (inputX != 0.0f) {
+                        body.velX = Approach(body.velX, targetVX, ax * dt);
+                    }
+                    else if (body.grounded) {
+                        body.velX = Approach(body.velX, 0.0f, friction * dt);
+                    }
+
+                    if (JumpPressed && body.grounded && !Down) {
+                        body.velY = jumpVel;
+                        body.grounded = false;
+                    }
+
+                    if (JumpPressed && Down) {
+                        body.oneWayDisableTimer = 0.20f;
+                        body.velY = std::min(body.velY, -120.0f);
+                        body.grounded = false;
+                    }
+
+                    if (auto* sAnim = m_scene.getSpriteAnimator(ent)) {
+                        const bool moving = (std::fabs(body.velX) > 5.0f);
+                        sAnim->setBool("moving", moving);
+                        if (AttackPressed) sAnim->trigger("attack");
+                    }
+                    };
+            }
+            else if (name == "GoblinTest") {
+                sc.onUpdate = [this](HBE::ECS::Entity ent, float dt) {
+                    (void)dt;
+                    if (auto* gAnim = m_scene.getSpriteAnimator(ent)) {
+                        gAnim->setBool("moving", false);
+                        if (HBE::Input::ActionPressed(HBE::Input::Action::UIConfirm)) {
+                            gAnim->trigger("attack");
+                        }
+                    }
+                    };
+            }
+            };
+
+        // Animator preset builder (rebuild the SM from a preset name)
+        loadCb.buildAnimatorPreset = [this](HBE::ECS::Entity e,
+            const std::string& preset,
+            HBE::Renderer::SpriteAnimationStateMachine& sm,
+            HBE::Renderer::Scene2D& scene)
+            {
+                (void)e; (void)scene;
+
+                if (preset == "GoblinAnimator") {
+                    sm.addClip({ "Idle",   0, 0, 6, 0.10f, true,  1.0f });
+                    sm.addClip({ "Run",    1, 0, 6, 0.08f, true,  1.0f });
+                    sm.addClip({ "Attack", 2, 0, 6, 0.07f, false, 1.0f });
+
+                    sm.addEvent("Run", 1, "footstep");
+                    sm.addEvent("Run", 4, "footstep");
+                    sm.addEvent("Attack", 3, "hitframe");
+
+                    sm.addState("Idle", "Idle");
+                    sm.addState("Run", "Run");
+                    sm.addState("Attack", "Attack");
+
+                    sm.addTransitionTrigger("*", "Attack", "attack");
+                    sm.addTransitionBool("Idle", "Run", "moving", true);
+                    sm.addTransitionBool("Run", "Idle", "moving", false);
+                    sm.addTransitionFinished("Attack", "Idle");
+                }
+
+                if (preset == "SoldierAnimator") {
+                    sm.addClip({ "Idle",   0, 0, 6, 0.10f, true,  1.0f });
+                    sm.addClip({ "Run",    1, 0, 8, 0.10f, true,  1.0f });
+                    sm.addClip({ "Attack", 2, 0, 7, 0.07f, false, 1.0f });
+
+                    sm.addEvent("Run", 2, "footstep");
+                    sm.addEvent("Run", 6, "footstep");
+                    sm.addEvent("Attack", 4, "hitframe");
+
+                    sm.addState("Idle", "Idle");
+                    sm.addState("Run", "Run");
+                    sm.addState("Attack", "Attack");
+
+                    sm.addTransitionTrigger("*", "Attack", "attack");
+                    sm.addTransitionBool("Idle", "Run", "moving", true);
+                    sm.addTransitionBool("Run", "Idle", "moving", false);
+                    sm.addTransitionFinished("Attack", "Idle");
+                }
+            };
+
+        const bool ok = HBE::Renderer::SceneSerializer::loadFromFile(
+            m_scene, SCENE_PATH, loadCb, &tilemapPath, &err);
+
+        if (!ok) {
+            LogError("Scene load FAILED: " + err);
+        }
+        else {
+            LogInfo(std::string("Scene loaded: ") + SCENE_PATH);
+
+            // Re-hook tilemap if scene file requested a different one
+            if (!tilemapPath.empty()) {
+                m_tileMapPath = tilemapPath;
+            }
+
+            // Rebuild tilemap (and collision context) using your existing hot-reload path
+            hotReloadTileMap();
+
+            // Re-find key entities by tag so camera follows correctly
+            m_soldierEntity = {};
+            m_goblinEntity = {};
+
+            auto& reg = m_scene.registry();
+            for (auto ent : reg.view<HBE::ECS::TagComponent>()) {
+                const auto& tag = reg.get<HBE::ECS::TagComponent>(ent).tag;
+                if (tag == "Player")  m_soldierEntity = ent;
+                if (tag == "Goblin")  m_goblinEntity = ent;
+            }
+        }
     }
 
     // Hot reload poll
@@ -562,7 +777,8 @@ void GameLayer::onUpdate(float dt) {
     Transform2D* playerTr = m_scene.getTransform(m_soldierEntity);
     if (!playerTr) return;
 
-    // Tick scripts + physics + animators; catch animation events
+    // Tick scripts + physics + animators.
+    // Catch animation events here.
     m_scene.update(dt, [&](const std::string& ev) {
         Transform2D* tr = m_scene.getTransform(m_soldierEntity);
         const float px = tr ? tr->posX : m_camera.x;
@@ -631,7 +847,7 @@ void GameLayer::onRender() {
             trg->posX, trg->posY + 40.0f,
             "-25",
             1.0f,
-            { 1.0f, 0.0f, 0.0f, 1.0f }, // (fixed: use 0..1 floats)
+            { 1.0f, 0.0f, 0.0f, 1.0f },
             TextRenderer2D::TextAlignH::Center,
             TextRenderer2D::TextAlignV::Baseline,
             0.0f,
@@ -659,6 +875,7 @@ void GameLayer::onRender() {
             const float w = col.halfW * 2.0f;
             const float h = col.halfH * 2.0f;
 
+            // DebugDraw2D::rect takes CENTER coords in your build
             m_debug.rect(r2d, cx, cy, w, h, 1, 0, 0, 1, false);
         }
 
@@ -760,7 +977,6 @@ bool GameLayer::onEvent(HBE::Core::Event& e) {
     return false;
 }
 
-
 void GameLayer::spawnPopup(float x, float y, const std::string& text,
     const HBE::Renderer::Color4& color, float lifetimeSeconds, float floatUpSpeed)
 {
@@ -777,17 +993,6 @@ void GameLayer::spawnPopup(float x, float y, const std::string& text,
 }
 
 void GameLayer::setupHotReloadWatches() {
-    // Extra startup logging to confirm you are watching the right file
-    HBE::Core::LogInfo("setupHotReloadWatches()");
-    HBE::Core::LogInfo("Watching tilemap: " + m_tileMapPath +
-        (std::filesystem::exists(m_tileMapPath) ? " (exists)" : " (MISSING)"));
-    HBE::Core::LogInfo("Watching theme: " + m_uiThemePath +
-        (std::filesystem::exists(m_uiThemePath) ? " (exists)" : " (MISSING)"));
-    HBE::Core::LogInfo("Watching shader VS: " + m_spriteVsPath +
-        (std::filesystem::exists(m_spriteVsPath) ? " (exists)" : " (MISSING)"));
-    HBE::Core::LogInfo("Watching shader FS: " + m_spriteFsPath +
-        (std::filesystem::exists(m_spriteFsPath) ? " (exists)" : " (MISSING)"));
-
     HBE::Core::FileWatcher::Options opt{};
     opt.pollIntervalSeconds = 0.20f;
     opt.debounceSeconds = 0.25f;
@@ -803,7 +1008,7 @@ void GameLayer::setupHotReloadWatches() {
     // UI theme hot reload
     m_watcher.watchFile(m_uiThemePath, [this](const std::string&) { hotReloadUITheme(); });
 
-    // Texture hot reload
+    // Texture hot reload (these names match your SpriteRenderer2D declare calls)
     m_watcher.watchFile("assets/Orc.png", [this](const std::string& p) { hotReloadTextureByPath(p); });
     m_watcher.watchFile("assets/Soldier.png", [this](const std::string& p) { hotReloadTextureByPath(p); });
     m_watcher.watchFile("assets/tiles/tiles.png", [this](const std::string& p) { hotReloadTextureByPath(p); });
@@ -813,19 +1018,22 @@ void GameLayer::hotReloadShader() {
     if (!m_app) return;
     bool ok = m_app->resources().reloadShader("sprite");
 
-    HBE::Core::LogInfo(ok ? "Shader reloaded: sprite" : "shader reload FAILED:");
+    // (world-space popup: may be off-screen depending on camera)
+    spawnPopup(20.0f, 680.0f,
+        ok ? "Shader reloaded: sprite" : "Shader reload FAILED (see log)",
+        ok ? HBE::Renderer::Color4{ 0.3f, 1.0f, 0.3f, 1.0f } : HBE::Renderer::Color4{ 1.0f, 0.3f, 0.3f, 1.0f },
+        1.25f, 0.0f);
 }
 
 void GameLayer::hotReloadTileMap() {
     if (!m_app) return;
 
-    HBE::Core::LogInfo("hotReloadTileMap() called: " + m_tileMapPath);
-
     HBE::Renderer::TileMap newMap{};
     std::string err;
 
     if (!HBE::Renderer::TileMapLoader::loadFromJsonFile(m_tileMapPath, newMap, &err)) {
-        HBE::Core::LogInfo("Tilemap reloaded FAILED: " + err);
+        spawnPopup(20.0f, 650.0f, "Tilemap reload FAILED: " + err,
+            HBE::Renderer::Color4{ 1.0f, 0.3f, 0.3f, 1.0f }, 1.5f, 0.0f);
         return;
     }
 
@@ -834,20 +1042,23 @@ void GameLayer::hotReloadTileMap() {
 
     // Rebuild tile renderer
     if (!m_tileRenderer.build(m_app->renderer2D(), m_app->resources(), m_spriteShader, m_quadMesh, m_tileMap)) {
-        HBE::Core::LogInfo("Tilemap reloaded rebuild FAILED.");
+        spawnPopup(20.0f, 650.0f, "Tile renderer rebuild FAILED",
+            HBE::Renderer::Color4{ 1.0f, 0.3f, 0.3f, 1.0f }, 1.5f, 0.0f);
         return;
     }
 
     // Refresh collision layer pointer + scene collision context
     m_collisionLayer = m_tileMap.findLayer("Ground");
     if (!m_collisionLayer) {
-        HBE::Core::LogInfo("Tilemap missing layer 'Ground' after reload");
+        spawnPopup(20.0f, 650.0f, "Tilemap missing layer 'Ground' after reload",
+            HBE::Renderer::Color4{ 1.0f, 0.3f, 0.3f, 1.0f }, 1.5f, 0.0f);
         return;
     }
 
     m_scene.setTileCollisionContext(&m_tileMap, m_collisionLayer);
 
-    HBE::Core::LogInfo("Tilemap reloaded");
+    spawnPopup(20.0f, 650.0f, "Tilemap reloaded",
+        HBE::Renderer::Color4{ 0.3f, 1.0f, 0.3f, 1.0f }, 1.25f, 0.0f);
 }
 
 void GameLayer::hotReloadUITheme() {
@@ -856,31 +1067,36 @@ void GameLayer::hotReloadUITheme() {
 
     bool ok = HBE::Renderer::UI::UIThemeLoader::loadStyleFromJsonFile(m_uiThemePath, s, &err);
     if (!ok) {
-        HBE::Core::LogInfo("UJI theme reload FAILED");
+        spawnPopup(20.0f, 620.0f, "UI theme reload FAILED: " + err,
+            HBE::Renderer::Color4{ 1.0f, 0.3f, 0.3f, 1.0f }, 1.5f, 0.0f);
         return;
     }
 
     m_ui.setStyle(s);
 
-    HBE::Core::LogInfo("UI Theme reloaded.");
-
+    spawnPopup(20.0f, 620.0f, "UI theme reloaded",
+        HBE::Renderer::Color4{ 0.3f, 1.0f, 0.3f, 1.0f }, 1.25f, 0.0f);
 }
 
 void GameLayer::hotReloadTextureByPath(const std::string& path) {
     if (!m_app) return;
 
+    // Map file path -> cache name you used when loading
     if (path == "assets/Orc.png") {
         m_app->resources().reloadTexture("orc_sheet");
-        HBE::Core::LogInfo("Texture reloaded: Orc.png");
+        spawnPopup(20.0f, 590.0f, "Texture reloaded: Orc.png",
+            HBE::Renderer::Color4{ 0.3f, 1.0f, 0.3f, 1.0f }, 1.0f, 0.0f);
     }
     else if (path == "assets/Soldier.png") {
         m_app->resources().reloadTexture("soldier_sheet");
-        HBE::Core::LogInfo("Texture reloaded: Soldier.png");
+        spawnPopup(20.0f, 590.0f, "Texture reloaded: Soldier.png",
+            HBE::Renderer::Color4{ 0.3f, 1.0f, 0.3f, 1.0f }, 1.0f, 0.0f);
     }
     else if (path == "assets/tiles/tiles.png") {
-        // Adjust cache key if your TileMapRenderer uses a different name
+        // If your TileMapRenderer uses a different cache key, adjust this:
         m_app->resources().reloadTexture("basic");
 
-        HBE::Core::LogInfo("Texture reloaded: tileset.png");
+        spawnPopup(20.0f, 590.0f, "Texture reloaded: tiles.png",
+            HBE::Renderer::Color4{ 0.3f, 1.0f, 0.3f, 1.0f }, 1.0f, 0.0f);
     }
 }

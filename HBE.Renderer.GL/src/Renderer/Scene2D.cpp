@@ -368,4 +368,11 @@ namespace HBE::Renderer {
         }
     }
 
+    void Scene2D::clear() {
+        // simplest: reset registry and runtime-only pointers
+        m_reg = HBE::ECS::Registry{};
+        m_tileMap = nullptr;
+        m_collisionLayer = nullptr;
+    }
+
 } // namespace HBE::Renderer
