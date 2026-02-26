@@ -8,6 +8,7 @@
 namespace HBE::Renderer {
 
 	using HBE::Core::LogError;
+	using HBE::Core::LogInfo;
 
 	GLShader* ResourceCache::getOrCreateShader(const std::string& name, const char* vertexSrc, const char* fragmentSrc) {
 		auto it = m_shaders.find(name);
@@ -24,6 +25,45 @@ namespace HBE::Renderer {
 		GLShader* raw = shader.get();
 		m_shaders.emplace(name, std::move(shader));
 		return raw;
+	}
+
+	GLShader* ResourceCache::getOrCreateShaderFromFiles(const std::string& name,
+		const std::string& vertexPath,
+		const std::string& fragmentPath)
+	{
+		auto it = m_shaders.find(name);
+		if (it != m_shaders.end()) {
+			// Track paths anyway
+			m_shaderFiles[name] = { vertexPath, fragmentPath };
+			return it->second.get();
+		}
+
+		auto shader = std::make_unique<GLShader>();
+		if (!shader->createFromFiles(vertexPath, fragmentPath)) {
+			LogError("ResourceCache: failed to create shader '" + name + "' from files.");
+			return nullptr;
+		}
+
+		GLShader* raw = shader.get();
+		m_shaders.emplace(name, std::move(shader));
+		m_shaderFiles[name] = { vertexPath, fragmentPath };
+		return raw;
+	}
+
+	bool ResourceCache::reloadShader(const std::string& name) {
+		auto it = m_shaders.find(name);
+		if (it == m_shaders.end()) return false;
+
+		GLShader* sh = it->second.get();
+
+		// Prefer the shader's own stored paths.
+		if (sh->reloadFromFiles()) return true;
+
+		// Fallback to tracked paths (in case shader was created from source)
+		auto pit = m_shaderFiles.find(name);
+		if (pit == m_shaderFiles.end()) return false;
+
+		return sh->createFromFiles(pit->second.first, pit->second.second);
 	}
 
 	Texture2D* ResourceCache::getOrCreateCheckerTexture(const std::string& name, int width, int height) {
@@ -63,7 +103,6 @@ namespace HBE::Renderer {
 		return raw;
 	}
 
-
 	Mesh* ResourceCache::getOrCreateMeshPosUV(const std::string& name, const std::vector<float>& vertices, int vertexCount) {
 		auto it = m_meshes.find(name);
 		if (it != m_meshes.end()) {
@@ -93,25 +132,40 @@ namespace HBE::Renderer {
 		return it->second.get();
 	}
 
-	Texture2D* ResourceCache::getOrCreateTextureFromFile(
-		const std::string& name,
-		const std::string& path)
+	Texture2D* ResourceCache::getOrCreateTextureFromFile(const std::string& name, const std::string& path)
 	{
 		auto it = m_textures.find(name);
 		if (it != m_textures.end()) {
+			m_textureFiles[name] = path;
 			return it->second.get();
 		}
 
 		auto tex = std::make_unique<Texture2D>();
 		if (!tex->loadFromFile(path)) {
-			LogError("ResourceCache: failed to load texture '" + name +
-				"' from '" + path + "'");
+			LogError("ResourceCache: failed to load texture '" + name + "' from '" + path + "'");
 			return nullptr;
 		}
 
 		Texture2D* raw = tex.get();
 		m_textures.emplace(name, std::move(tex));
+		m_textureFiles[name] = path;
 		return raw;
+	}
+
+	bool ResourceCache::reloadTexture(const std::string& name) {
+		auto it = m_textures.find(name);
+		if (it == m_textures.end()) return false;
+
+		auto pit = m_textureFiles.find(name);
+		if (pit == m_textureFiles.end()) return false;
+
+		Texture2D* tex = it->second.get();
+		const std::string& path = pit->second;
+
+		const bool ok = tex->loadFromFile(path);
+		if (ok) LogInfo("Texture hot reloaded: " + name + " <- " + path);
+		else    LogError("Texture reload failed: " + name + " <- " + path);
+		return ok;
 	}
 
 	Texture2D* ResourceCache::getOrCreateTextureFromRGBA(
@@ -136,10 +190,10 @@ namespace HBE::Renderer {
 		return raw;
 	}
 
-
 	Mesh* ResourceCache::getMesh(const std::string& name) const {
 		auto it = m_meshes.find(name);
 		if (it == m_meshes.end()) return nullptr;
 		return it->second.get();
 	}
-}
+
+} // namespace HBE::Renderer

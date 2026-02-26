@@ -13,13 +13,19 @@
 #include "HBE/Renderer/Mesh.h"
 #include "HBE/Renderer/RenderItem.h"
 #include "HBE/Renderer/Transform2D.h"
+#include "HBE/Renderer/UI/UIThemeLoader.h"
+
+#include "HBE/Renderer/TileMapLoader.h"
 
 #include "HBE/ECS/Components.h"
 
 #include <SDL3/SDL_scancode.h>
+#include <SDL3/SDL_gamepad.h>
+
 #include <cmath>
 #include <vector>
 #include <string>
+#include <filesystem>
 
 #include <algorithm> // remove_if
 #include <utility>   // move
@@ -105,6 +111,12 @@ namespace {
 void GameLayer::onAttach(Application& app) {
     m_app = &app;
 
+    // Ensure hot-reload paths are set (IMPORTANT: avoids empty-string watches if header defaults differ)
+    m_tileMapPath = "assets/maps/test_map.json";
+    m_uiThemePath = "assets/ui/theme.json";
+    m_spriteVsPath = "assets/shaders/sprite.vert";
+    m_spriteFsPath = "assets/shaders/sprite.frag";
+
     // ------------------------------------------------------------
     // Input Mapping Layer:
     // - Game defines defaults here
@@ -112,6 +124,8 @@ void GameLayer::onAttach(Application& app) {
     // ------------------------------------------------------------
     HBE::Input::Initialize(&RegisterDefaultBindings);
     HBE::Input::Get().loadFromFile(BINDINGS_FILE); // safe if missing (returns false)
+
+    HBE::Core::LogInfo(std::string("CWD: ") + std::filesystem::current_path().string());
 
     // camera setup (logical resolution)
     m_camera.x = std::round(m_camera.x);
@@ -127,6 +141,7 @@ void GameLayer::onAttach(Application& app) {
 
     buildSpritePipeline();
 
+    // Default UI style (theme.json can override)
     HBE::Renderer::UI::UIStyle style;
     style.textScale = 1.0f;
     style.itemH = 34.0f;
@@ -136,7 +151,7 @@ void GameLayer::onAttach(Application& app) {
 
     // load Tilemap
     std::string err;
-    if (!HBE::Renderer::TileMapLoader::loadFromJsonFile("assets/maps/test_map.json", m_tileMap, &err)) {
+    if (!HBE::Renderer::TileMapLoader::loadFromJsonFile(m_tileMapPath, m_tileMap, &err)) {
         LogFatal("Failed to load tilemap: " + err);
         m_app->requestQuit();
         return;
@@ -148,6 +163,9 @@ void GameLayer::onAttach(Application& app) {
         m_app->requestQuit();
         return;
     }
+
+    setupHotReloadWatches();
+    hotReloadUITheme(); // apply theme at startup (optional)
 
     // choose collision layer by name
     m_collisionLayer = m_tileMap.findLayer("Ground");
@@ -215,10 +233,9 @@ void GameLayer::onAttach(Application& app) {
 
             // -------- INPUT (mapped) --------
             const float inputX = HBE::Input::AxisValue(HBE::Input::Axis::MoveX);
-            const float inputY = HBE::Input::AxisValue(HBE::Input::Axis::MoveY); // if you want it later
+            const float inputY = HBE::Input::AxisValue(HBE::Input::Axis::MoveY);
 
-            const bool Down = (inputY > 0.5f); // keeps your old "Down" behavior if you need it
-
+            const bool Down = (inputY > 0.5f);
             const bool JumpPressed = HBE::Input::ActionPressed(HBE::Input::Action::Jump);
             const bool AttackPressed = HBE::Input::ActionPressed(HBE::Input::Action::Attack);
 
@@ -314,55 +331,60 @@ void GameLayer::onAttach(Application& app) {
 void GameLayer::buildSpritePipeline() {
     auto& resources = m_app->resources();
 
-    // sprite shader
-    const char* spriteVs = R"(#version 330 core
-        layout(location = 0) in vec3 aPos;
-        layout(location = 1) in vec2 aUV;
+    // File-backed shader (hot reload friendly)
+    m_spriteShader = resources.getOrCreateShaderFromFiles("sprite", m_spriteVsPath, m_spriteFsPath);
 
-        out vec2 vUV;
-
-        uniform mat4 uMVP;
-        uniform vec4 uUVRect; // xy offset, zw scale
-
-        void main() {
-            vUV = aUV * uUVRect.zw + uUVRect.xy;
-            gl_Position = uMVP * vec4(aPos, 1.0);
-        }
-    )";
-
-    const char* spriteFs = R"(#version 330 core
-    in vec2 vUV;
-    out vec4 FragColor;
-
-    uniform sampler2D uTex;
-    uniform vec4 uColor;
-
-    uniform int uIsSDF;
-    uniform float uSDFSoftness;
-
-    void main() {
-        vec4 tex = texture(uTex, vUV);
-
-        if (uIsSDF == 0) {
-            FragColor = tex * uColor;
-            return;
-        }
-
-        float dist = tex.a;
-        float w = fwidth(dist) * max(uSDFSoftness, 0.001);
-        float alpha = smoothstep(0.5 - w, 0.5 + w, dist);
-        FragColor = vec4(uColor.rgb, uColor.a * alpha);
-    }
-    )";
-
-    m_spriteShader = resources.getOrCreateShader("sprite", spriteVs, spriteFs);
+    // Fallback (only if files missing / failed)
     if (!m_spriteShader) {
-        LogFatal("GameLayer: failed to create sprite shader.");
-        m_app->requestQuit();
+        const char* spriteVs = R"(#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aUV;
+
+out vec2 vUV;
+
+uniform mat4 uMVP;
+uniform vec4 uUVRect; // xy offset, zw scale
+
+void main() {
+    vUV = aUV * uUVRect.zw + uUVRect.xy;
+    gl_Position = uMVP * vec4(aPos, 1.0);
+}
+)";
+
+        const char* spriteFs = R"(#version 330 core
+in vec2 vUV;
+out vec4 FragColor;
+
+uniform sampler2D uTex;
+uniform vec4 uColor;
+
+uniform int uIsSDF;
+uniform float uSDFSoftness;
+
+void main() {
+    vec4 tex = texture(uTex, vUV);
+
+    if (uIsSDF == 0) {
+        FragColor = tex * uColor;
         return;
     }
 
-    // quad mesh (pos + uv) as 2 triangles (6 verts) for the current Mesh API
+    float dist = tex.a;
+    float w = fwidth(dist) * max(uSDFSoftness, 0.001);
+    float alpha = smoothstep(0.5 - w, 0.5 + w, dist);
+    FragColor = vec4(uColor.rgb, uColor.a * alpha);
+}
+)";
+
+        m_spriteShader = resources.getOrCreateShader("sprite", spriteVs, spriteFs);
+        if (!m_spriteShader) {
+            LogFatal("GameLayer: failed to create sprite shader.");
+            m_app->requestQuit();
+            return;
+        }
+    }
+
+    // quad mesh (pos + uv) as 2 triangles (6 verts)
     std::vector<float> quadVerts = {
         // tri 1
         -0.5f, -0.5f, 0.0f,   0.0f, 0.0f,
@@ -444,7 +466,7 @@ void GameLayer::buildSpritePipeline() {
     goblin.transform.posY = 95.0f;
     goblin.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     goblin.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-    goblin.layer = 100; // base entity layer
+    goblin.layer = 100;
     goblin.sortKey = goblin.transform.posY;
 
     RenderItem soldier{};
@@ -454,9 +476,7 @@ void GameLayer::buildSpritePipeline() {
     soldier.transform.posY = 95.0f;
     soldier.transform.scaleX = desc.frameWidth * SPRITE_PIXEL_SCALE;
     soldier.transform.scaleY = desc.frameHeight * SPRITE_PIXEL_SCALE;
-
-    // Make player render above goblin:
-    soldier.layer = 200;
+    soldier.layer = 200; // render above goblin
     soldier.sortKey = soldier.transform.posY;
 
     SpriteRenderer2D::setFrame(goblin, m_goblinSheet, 0, 0);
@@ -528,21 +548,21 @@ void GameLayer::onUpdate(float dt) {
 
     if (m_statTimer >= 0.5) {
         const double window = m_statTimer;
-
         m_fps = (float)((double)m_frameCount / window);
         m_ups = (float)((double)m_updateCount / window);
-
         m_frameCount = 0;
         m_updateCount = 0;
         m_statTimer = 0.0;
     }
 
+    // Hot reload poll
+    m_watcher.poll(dt);
+
     // Controlled entity (for camera follow)
     Transform2D* playerTr = m_scene.getTransform(m_soldierEntity);
     if (!playerTr) return;
 
-    // Tick scripts + physics + animators.
-    // Catch animation events here.
+    // Tick scripts + physics + animators; catch animation events
     m_scene.update(dt, [&](const std::string& ev) {
         Transform2D* tr = m_scene.getTransform(m_soldierEntity);
         const float px = tr ? tr->posX : m_camera.x;
@@ -611,7 +631,7 @@ void GameLayer::onRender() {
             trg->posX, trg->posY + 40.0f,
             "-25",
             1.0f,
-            { 255,0.0f,0.0f,1 },
+            { 1.0f, 0.0f, 0.0f, 1.0f }, // (fixed: use 0..1 floats)
             TextRenderer2D::TextAlignH::Center,
             TextRenderer2D::TextAlignV::Baseline,
             0.0f,
@@ -639,7 +659,6 @@ void GameLayer::onRender() {
             const float w = col.halfW * 2.0f;
             const float h = col.halfH * 2.0f;
 
-            // DebugDraw2D::rect takes CENTER coords in your build
             m_debug.rect(r2d, cx, cy, w, h, 1, 0, 0, 1, false);
         }
 
@@ -663,8 +682,7 @@ void GameLayer::onRender() {
     // world popups
     for (const auto& p : m_popups) {
         float t = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 0.0f;
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
+        t = std::clamp(t, 0.0f, 1.0f);
 
         Color4 c = p.color;
         c.a *= t;
@@ -742,6 +760,7 @@ bool GameLayer::onEvent(HBE::Core::Event& e) {
     return false;
 }
 
+
 void GameLayer::spawnPopup(float x, float y, const std::string& text,
     const HBE::Renderer::Color4& color, float lifetimeSeconds, float floatUpSpeed)
 {
@@ -755,4 +774,113 @@ void GameLayer::spawnPopup(float x, float y, const std::string& text,
     p.floatSpeed = floatUpSpeed;
 
     m_popups.push_back(std::move(p));
+}
+
+void GameLayer::setupHotReloadWatches() {
+    // Extra startup logging to confirm you are watching the right file
+    HBE::Core::LogInfo("setupHotReloadWatches()");
+    HBE::Core::LogInfo("Watching tilemap: " + m_tileMapPath +
+        (std::filesystem::exists(m_tileMapPath) ? " (exists)" : " (MISSING)"));
+    HBE::Core::LogInfo("Watching theme: " + m_uiThemePath +
+        (std::filesystem::exists(m_uiThemePath) ? " (exists)" : " (MISSING)"));
+    HBE::Core::LogInfo("Watching shader VS: " + m_spriteVsPath +
+        (std::filesystem::exists(m_spriteVsPath) ? " (exists)" : " (MISSING)"));
+    HBE::Core::LogInfo("Watching shader FS: " + m_spriteFsPath +
+        (std::filesystem::exists(m_spriteFsPath) ? " (exists)" : " (MISSING)"));
+
+    HBE::Core::FileWatcher::Options opt{};
+    opt.pollIntervalSeconds = 0.20f;
+    opt.debounceSeconds = 0.25f;
+    m_watcher.setOptions(opt);
+
+    // Shader hot reload
+    m_watcher.watchFile(m_spriteVsPath, [this](const std::string&) { hotReloadShader(); });
+    m_watcher.watchFile(m_spriteFsPath, [this](const std::string&) { hotReloadShader(); });
+
+    // Tilemap hot reload
+    m_watcher.watchFile(m_tileMapPath, [this](const std::string&) { hotReloadTileMap(); });
+
+    // UI theme hot reload
+    m_watcher.watchFile(m_uiThemePath, [this](const std::string&) { hotReloadUITheme(); });
+
+    // Texture hot reload
+    m_watcher.watchFile("assets/Orc.png", [this](const std::string& p) { hotReloadTextureByPath(p); });
+    m_watcher.watchFile("assets/Soldier.png", [this](const std::string& p) { hotReloadTextureByPath(p); });
+    m_watcher.watchFile("assets/tiles/tiles.png", [this](const std::string& p) { hotReloadTextureByPath(p); });
+}
+
+void GameLayer::hotReloadShader() {
+    if (!m_app) return;
+    bool ok = m_app->resources().reloadShader("sprite");
+
+    HBE::Core::LogInfo(ok ? "Shader reloaded: sprite" : "shader reload FAILED:");
+}
+
+void GameLayer::hotReloadTileMap() {
+    if (!m_app) return;
+
+    HBE::Core::LogInfo("hotReloadTileMap() called: " + m_tileMapPath);
+
+    HBE::Renderer::TileMap newMap{};
+    std::string err;
+
+    if (!HBE::Renderer::TileMapLoader::loadFromJsonFile(m_tileMapPath, newMap, &err)) {
+        HBE::Core::LogInfo("Tilemap reloaded FAILED: " + err);
+        return;
+    }
+
+    // Swap map
+    m_tileMap = std::move(newMap);
+
+    // Rebuild tile renderer
+    if (!m_tileRenderer.build(m_app->renderer2D(), m_app->resources(), m_spriteShader, m_quadMesh, m_tileMap)) {
+        HBE::Core::LogInfo("Tilemap reloaded rebuild FAILED.");
+        return;
+    }
+
+    // Refresh collision layer pointer + scene collision context
+    m_collisionLayer = m_tileMap.findLayer("Ground");
+    if (!m_collisionLayer) {
+        HBE::Core::LogInfo("Tilemap missing layer 'Ground' after reload");
+        return;
+    }
+
+    m_scene.setTileCollisionContext(&m_tileMap, m_collisionLayer);
+
+    HBE::Core::LogInfo("Tilemap reloaded");
+}
+
+void GameLayer::hotReloadUITheme() {
+    HBE::Renderer::UI::UIStyle s = m_ui.style();
+    std::string err;
+
+    bool ok = HBE::Renderer::UI::UIThemeLoader::loadStyleFromJsonFile(m_uiThemePath, s, &err);
+    if (!ok) {
+        HBE::Core::LogInfo("UJI theme reload FAILED");
+        return;
+    }
+
+    m_ui.setStyle(s);
+
+    HBE::Core::LogInfo("UI Theme reloaded.");
+
+}
+
+void GameLayer::hotReloadTextureByPath(const std::string& path) {
+    if (!m_app) return;
+
+    if (path == "assets/Orc.png") {
+        m_app->resources().reloadTexture("orc_sheet");
+        HBE::Core::LogInfo("Texture reloaded: Orc.png");
+    }
+    else if (path == "assets/Soldier.png") {
+        m_app->resources().reloadTexture("soldier_sheet");
+        HBE::Core::LogInfo("Texture reloaded: Soldier.png");
+    }
+    else if (path == "assets/tiles/tiles.png") {
+        // Adjust cache key if your TileMapRenderer uses a different name
+        m_app->resources().reloadTexture("basic");
+
+        HBE::Core::LogInfo("Texture reloaded: tileset.png");
+    }
 }
