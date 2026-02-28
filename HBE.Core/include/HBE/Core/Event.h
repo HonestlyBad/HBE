@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace HBE::Core {
 
@@ -8,6 +9,9 @@ namespace HBE::Core {
 		None = 0,
 		WindowResize,
 		KeyPressed,
+
+		// NEW:
+		TextInput,
 
 		MouseMoved,
 		MouseButtonPressed,
@@ -25,7 +29,9 @@ namespace HBE::Core {
 
 	class WindowResizeEvent final : public Event {
 	public:
-		WindowResizeEvent(int widthPx, int heightPx, int viewportX, int viewportY, int viewportW, int viewportH) : width(widthPx), height(heightPx), vpX(viewportX), vpY(viewportY), vpW(viewportW), vpH(viewportH) {}
+		WindowResizeEvent(int widthPx, int heightPx, int viewportX, int viewportY, int viewportW, int viewportH)
+			: width(widthPx), height(heightPx), vpX(viewportX), vpY(viewportY), vpW(viewportW), vpH(viewportH) {
+		}
 
 		EventType type() const override { return EventType::WindowResize; }
 
@@ -49,6 +55,16 @@ namespace HBE::Core {
 		bool repeat = false;
 	};
 
+	// NEW: Text input (for console / UI typing)
+	class TextInputEvent final : public Event {
+	public:
+		explicit TextInputEvent(const char* utf8Text) : text(utf8Text ? utf8Text : "") {}
+		EventType type() const override { return EventType::TextInput; }
+
+		// SDL gives UTF-8. Good enough for console.
+		std::string text;
+	};
+
 	// --------------- Mouse Events -------------------
 	class MouseMovedEvent final : public Event {
 	public:
@@ -58,13 +74,11 @@ namespace HBE::Core {
 
 		EventType type() const override { return EventType::MouseMoved; }
 
-		// window coords (top-left origin)
 		float x = 0.0f;
 		float y = 0.0f;
 		float dx = 0.0f;
 		float dy = 0.0f;
 
-		// Letterboxed logical space( 0... logicalW, 0...LogicalH) if inside viewport
 		bool inViewport = false;
 		float logicalX = 0.0f;
 		float logicalY = 0.0f;
@@ -80,7 +94,7 @@ namespace HBE::Core {
 
 		int button = 0; // SDL mouse button index (1..5)
 		int clicks = 0;
-		
+
 		float x = 0.0f;
 		float y = 0.0f;
 
@@ -97,7 +111,7 @@ namespace HBE::Core {
 
 		EventType type() const override { return EventType::MouseButtonReleased; }
 
-		int button = 0; // SDL mouse button index (1..5)
+		int button = 0;
 
 		float x = 0.0f;
 		float y = 0.0f;
@@ -115,8 +129,8 @@ namespace HBE::Core {
 
 		EventType type() const override { return EventType::MouseScrolled; }
 
-		float wheelX = 0.0f; // +right, -left
-		float wheelY = 0.0f; // +away, -toward (user)
+		float wheelX = 0.0f;
+		float wheelY = 0.0f;
 
 		float mouseX = 0.0f;
 		float mouseY = 0.0f;

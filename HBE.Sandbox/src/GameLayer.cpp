@@ -1,4 +1,5 @@
 #include "GameLayer.h"
+#include "DevConsole.h"
 
 #include "HBE/Core/Application.h"
 #include "HBE/Core/Log.h"
@@ -124,7 +125,7 @@ namespace {
 
 void GameLayer::onAttach(Application& app) {
     m_app = &app;
-
+    m_console.setWindow(app.platform().getWindow());
     // Ensure paths are initialized (prevents empty-string watches if header defaults differ)
     if (m_tileMapPath.empty())  m_tileMapPath = "assets/maps/test_map.json";
     if (m_uiThemePath.empty())  m_uiThemePath = "assets/ui/theme.json";
@@ -200,6 +201,91 @@ void GameLayer::onAttach(Application& app) {
         m_scene.setPhysics2DSettings(phys);
     }
 
+    // -------------------------
+    // Dev Console commands
+    // -------------------------
+    m_console.print("Console ready. Type 'help'.");
+
+    m_console.registerCommand("help", "List commands", [this](const std::vector<std::string>&) {
+        m_console.print("Commands:");
+        m_console.print("  help");
+        m_console.print("  clear");
+        m_console.print("  cull [0/1]");
+        m_console.print("  colliders [0/1]");
+        m_console.print("  gravity <value>");
+        m_console.print("  tp <x> <y>       (teleport player/soldier)");
+        m_console.print("  reload_ui");
+        m_console.print("  reload_shader");
+        });
+
+    m_console.registerCommand("clear", "Clear console output", [this](const std::vector<std::string>&) {
+        m_console.clear();
+        });
+
+    m_console.registerCommand("cull", "cull [0/1] - enable/disable scene culling", [this](const std::vector<std::string>& args) {
+        if (args.empty()) {
+            m_console.print(std::string("cull = ") + (m_enableCulling ? "1" : "0"));
+            return;
+        }
+        m_enableCulling = (args[0] != "0");
+        m_scene.setCullingEnabled(m_enableCulling);
+        m_console.print(std::string("cull set to ") + (m_enableCulling ? "1" : "0"));
+        });
+
+    m_console.registerCommand("colliders", "colliders [0/1] - show collider overlay", [this](const std::vector<std::string>& args) {
+        if (args.empty()) {
+            m_console.print(std::string("colliders = ") + (m_debugDraw ? "1" : "0"));
+            return;
+        }
+        m_debugDraw = (args[0] != "0");
+        m_console.print(std::string("colliders set to ") + (m_debugDraw ? "1" : "0"));
+        });
+
+    m_console.registerCommand("gravity", "gravity <value> - set physics gravityY", [this](const std::vector<std::string>& args) {
+        if (args.size() < 1) {
+            m_console.print("Usage: gravity <value>");
+            return;
+        }
+        float g = std::stof(args[0]);
+        auto s = m_scene.physics2DSettings();
+        s.gravityY = g;
+        m_scene.setPhysics2DSettings(s);
+        m_console.print("gravityY set.");
+        });
+
+    m_console.registerCommand("tp", "tp <x> <y> - teleport player", [this](const std::vector<std::string>& args) {
+        if (args.size() < 2) {
+            m_console.print("Usage: tp <x> <y>");
+            return;
+        }
+        float x = std::stof(args[0]);
+        float y = std::stof(args[1]);
+
+        auto& reg = m_scene.registry();
+        if (reg.valid(m_soldierEntity) && reg.has<HBE::Renderer::Transform2D>(m_soldierEntity)) {
+            auto& tr = reg.get<HBE::Renderer::Transform2D>(m_soldierEntity);
+            tr.posX = x;
+            tr.posY = y;
+            m_console.print("Teleported player.");
+        }
+        else {
+            m_console.print("Player entity invalid.");
+        }
+        });
+
+    m_console.registerCommand("reload_ui", "Hot reload UI theme", [this](const std::vector<std::string>&) {
+        hotReloadUITheme();
+        m_console.print("UI theme reloaded.");
+        });
+
+    m_console.registerCommand("reload_shader", "Hot reload sprite shader", [this](const std::vector<std::string>&) {
+        hotReloadShader();
+        m_console.print("Sprite shader reloaded.");
+        });
+
+    // make sure scene matches current toggle
+    m_scene.setCullingEnabled(m_enableCulling);
+
     // -----------------------------
     // ECS: attach gameplay components + scripts
     // -----------------------------
@@ -246,6 +332,18 @@ void GameLayer::onAttach(Application& app) {
         HBE::ECS::Script sc{};
         sc.name = "PlayerController";
         sc.onUpdate = [this](HBE::ECS::Entity e, float dt) {
+            if (m_console.isOpen()) {
+                // Optional: kill movement so player doesn't keep sliding
+                auto& r = m_scene.registry();
+                if (r.has<HBE::ECS::RigidBody2D>(e)) {
+                    auto& body = r.get<HBE::ECS::RigidBody2D>(e);
+                    body.accelX = 0.0f;
+                    body.accelY = 0.0f;
+                    body.velX = 0.0f;
+                    // don't zero velY if you want gravity to keep acting while typing
+                }
+                return;
+            }
             auto& r = m_scene.registry();
             if (!r.has<HBE::ECS::RigidBody2D>(e) || !r.has<Transform2D>(e)) return;
 
@@ -768,6 +866,13 @@ void GameLayer::onUpdate(float dt) {
                 if (tag == "Goblin")  m_goblinEntity = ent;
             }
         }
+
+        // FPS history (instant)
+        float instFps = (dt > 0.00001f) ? (1.0f / dt) : 0.0f;
+        m_fpsHistory.push_back(instFps);
+        if ((int)m_fpsHistory.size() > m_fpsHistoryMax) {
+            m_fpsHistory.erase(m_fpsHistory.begin(), m_fpsHistory.begin() + (m_fpsHistory.size() - m_fpsHistoryMax));
+        }
     }
 
     // Hot reload poll
@@ -862,37 +967,24 @@ void GameLayer::onRender() {
     if (m_debugDraw) {
         auto& reg = m_scene.registry();
 
-        // Player collider (red)
-        if (reg.valid(m_soldierEntity) &&
-            reg.has<Transform2D>(m_soldierEntity) &&
-            reg.has<HBE::ECS::Collider2D>(m_soldierEntity))
-        {
-            const auto& tr = reg.get<Transform2D>(m_soldierEntity);
-            const auto& col = reg.get<HBE::ECS::Collider2D>(m_soldierEntity);
+        if (m_drawAllColliders) {
+            for (auto e : reg.view<HBE::Renderer::Transform2D, HBE::ECS::Collider2D>()) {
+                auto& tr = reg.get<HBE::Renderer::Transform2D>(e);
+                auto& col = reg.get<HBE::ECS::Collider2D>(e);
 
-            const float cx = tr.posX + col.offsetX;
-            const float cy = tr.posY + col.offsetY;
-            const float w = col.halfW * 2.0f;
-            const float h = col.halfH * 2.0f;
+                float cx = tr.posX + col.offsetX;
+                float cy = tr.posY + col.offsetY;
+                float w = col.halfW * 2.0f;
+                float h = col.halfH * 2.0f;
 
-            // DebugDraw2D::rect takes CENTER coords in your build
-            m_debug.rect(r2d, cx, cy, w, h, 1, 0, 0, 1, false);
-        }
+                // color: trigger=yellow, dynamic=green, static=cyan-ish
+                float r = 0.0f, g = 1.0f, b = 0.0f, a = 1.0f;
 
-        // Goblin collider (green)
-        if (reg.valid(m_goblinEntity) &&
-            reg.has<Transform2D>(m_goblinEntity) &&
-            reg.has<HBE::ECS::Collider2D>(m_goblinEntity))
-        {
-            const auto& tr = reg.get<Transform2D>(m_goblinEntity);
-            const auto& col = reg.get<HBE::ECS::Collider2D>(m_goblinEntity);
+                if (col.isTrigger) { r = 1.0f; g = 1.0f; b = 0.2f; }
+                if (reg.has<HBE::ECS::RigidBody2D>(e) && reg.get<HBE::ECS::RigidBody2D>(e).isStatic) { r = 0.2f; g = 0.9f; b = 1.0f; }
 
-            const float cx = tr.posX + col.offsetX;
-            const float cy = tr.posY + col.offsetY;
-            const float w = col.halfW * 2.0f;
-            const float h = col.halfH * 2.0f;
-
-            m_debug.rect(r2d, cx, cy, w, h, 0, 1, 0, 1, false);
+                m_debug.rect(r2d, cx, cy, w, h, r, g, b, a, false);
+            }
         }
     }
 
@@ -926,38 +1018,200 @@ void GameLayer::onRender() {
 
     using namespace HBE::Renderer::UI;
 
-    UIRect panel;
-    panel.x = 20.0f;
-    panel.y = 320.0f;
-    panel.w = 260.0f;
-    panel.h = 360.0f;
+    UIRect tools;
+    tools.x = 20.0f;
+    tools.y = 20.0f;
+    tools.w = 320.0f;
+    tools.h = 280.0f;
 
-    m_ui.beginPanel("main_panel", panel, "HBE UI");
+    if (m_showDevTools) {
+        auto savedStyle = m_ui.style();
+        {
+            auto s = savedStyle;
+            s.itemH = 28.0f;
+            s.padding = 10.0f;
+            s.spacing = 6.0f;
+            s.textScale = 0.90f;
+            m_ui.setStyle(s);
+        }
 
-    m_ui.label("Widgets online.", true);
-    m_ui.spacing(6.0f);
+        m_ui.beginPanel("dev_tools", tools, "Dev Tools");
 
-    if (m_ui.button("btn_1", "Print Hello")) {
-        HBE::Core::LogInfo("Hello from UI button!");
+        m_ui.checkbox("chk_cull", "Scene Culling", m_enableCulling);
+        m_scene.setCullingEnabled(m_enableCulling);
+
+        m_ui.checkbox("chk_colliders", "Collision Overlay", m_debugDraw);
+        m_ui.checkbox("chk_all_colliders", "Draw All Colliders", m_drawAllColliders);
+
+        m_ui.checkbox("chk_fps_graph", "Show FPS Graph", m_showFpsGraph);
+
+        m_ui.spacing(8.0f);
+
+        if (m_ui.button("btn_reload_ui", "Reload UI")) hotReloadUITheme();
+        if (m_ui.button("btn_reload_shader", "Reload Shader")) hotReloadShader();
+
+        m_ui.spacing(2.0f);
+
+        auto saved = m_ui.style();
+        {
+            auto s = saved;
+            s.textScale = 0.78f;
+            s.itemH = 18.0f;
+            m_ui.setStyle(s);
+        }
+
+        m_ui.label("F1 all   F2 tools   F3 inspect   F4 console   F5 fps", true);
+
+        m_ui.setStyle(saved);
+
+        m_ui.endPanel();
+    }
+    if (m_showFpsGraph) {
+        auto savedStyle = m_ui.style();
+        {
+            auto s = savedStyle;
+            s.textScale = 0.85f;
+            s.itemH = 22.0f;
+            s.padding = 8.0f;
+            s.spacing = 4.0f;
+            m_ui.setStyle(s);
+        }
+
+        UIRect g;
+        g.x = 20.0f;
+        g.y = 305.0f;
+        g.w = 260.0f;
+        g.h = 50.0f; // <- actually small now
+
+        m_ui.beginPanel("fps_graph", g, "FPS");
+
+        // Show current (single line only)
+        char buf[128];
+        std::snprintf(buf, sizeof(buf), "FPS %.1f  UPS %.1f  dt %.3f", m_fps, m_ups, m_lastDt);
+        m_ui.label(buf, true);
+
+        m_ui.endPanel();
+        m_ui.setStyle(savedStyle);
+    }
+    UIRect insp;
+    insp.x = LOGICAL_WIDTH - 420.0f;
+    insp.y = 20.0f;
+    insp.w = 400.0f;
+    insp.h = 520.0f;
+
+    if (m_showInspector) {
+        m_ui.beginPanel("inspector", insp, "Inspector");
+
+        auto& reg = m_scene.registry();
+
+        m_ui.label("Entities", true);
+
+        // live list (Transform-driven)
+        int shown = 0;
+        for (auto e : reg.view<HBE::Renderer::Transform2D>()) {
+            if (shown++ >= 12) { // keep it readable for now
+                m_ui.label("... (more omitted)", true);
+                break;
+            }
+
+            std::string name = "Entity " + std::to_string((uint32_t)e);
+            if (reg.has<HBE::ECS::TagComponent>(e)) {
+                const auto& tag = reg.get<HBE::ECS::TagComponent>(e).tag;
+                if (!tag.empty()) name = tag + " (" + std::to_string((uint32_t)e) + ")";
+            }
+
+            std::string id = "ent_" + std::to_string((uint32_t)e);
+            if (m_ui.button(id.c_str(), name.c_str())) {
+                m_selectedEntity = e;
+            }
+        }
+
+        m_ui.spacing(10.0f);
+
+        // selected details
+        if (reg.valid(m_selectedEntity)) {
+            std::string header = "Selected: " + std::to_string((uint32_t)m_selectedEntity);
+            m_ui.label(header.c_str(), false);
+            m_ui.spacing(6.0f);
+
+            // TAG
+            if (reg.has<HBE::ECS::TagComponent>(m_selectedEntity)) {
+                const auto& tag = reg.get<HBE::ECS::TagComponent>(m_selectedEntity).tag;
+                std::string tagLine = "Tag: " + tag;
+                m_ui.label(tagLine.c_str(), true);
+            }
+
+            // TRANSFORM
+            if (reg.has<HBE::Renderer::Transform2D>(m_selectedEntity)) {
+                auto& tr = reg.get<HBE::Renderer::Transform2D>(m_selectedEntity);
+                m_ui.label("Transform", true);
+
+                m_ui.sliderFloat("tr_x", "posX", tr.posX, -5000.0f, 5000.0f, 1.0f);
+                m_ui.sliderFloat("tr_y", "posY", tr.posY, -5000.0f, 5000.0f, 1.0f);
+                constexpr float PI = 3.14159265358979323846f;
+                m_ui.sliderFloat("tr_rot", "rotation (rad)", tr.rotation, -PI, PI, 0.01f);
+                m_ui.sliderFloat("tr_sx", "scaleX", tr.scaleX, 0.1f, 10.0f, 0.1f);
+                m_ui.sliderFloat("tr_sy", "scaleY", tr.scaleY, 0.1f, 10.0f, 0.1f);
+
+                m_ui.spacing(6.0f);
+            }
+
+            // SPRITE
+            if (reg.has<HBE::Renderer::SpriteComponent2D>(m_selectedEntity)) {
+                auto& spr = reg.get<HBE::Renderer::SpriteComponent2D>(m_selectedEntity);
+                m_ui.label("Sprite", true);
+                m_ui.sliderInt("spr_layer", "layer", spr.layer, -10, 50);
+                m_ui.sliderFloat("spr_sort", "sortKey", spr.sortKey, -5000.0f, 5000.0f, 1.0f);
+                m_ui.sliderFloat("spr_sorty", "sortOffsetY", spr.sortOffsetY, -200.0f, 200.0f, 1.0f);
+                m_ui.spacing(6.0f);
+            }
+
+            // COLLIDER
+            if (reg.has<HBE::ECS::Collider2D>(m_selectedEntity)) {
+                auto& col = reg.get<HBE::ECS::Collider2D>(m_selectedEntity);
+                m_ui.label("Collider2D", true);
+                m_ui.sliderFloat("col_hw", "halfW", col.halfW, 0.0f, 500.0f, 0.5f);
+                m_ui.sliderFloat("col_hh", "halfH", col.halfH, 0.0f, 500.0f, 0.5f);
+                m_ui.sliderFloat("col_ox", "offsetX", col.offsetX, -200.0f, 200.0f, 0.5f);
+                m_ui.sliderFloat("col_oy", "offsetY", col.offsetY, -200.0f, 200.0f, 0.5f);
+                m_ui.checkbox("col_trig", "isTrigger", col.isTrigger);
+                m_ui.spacing(6.0f);
+            }
+
+            // RIGIDBODY
+            if (reg.has<HBE::ECS::RigidBody2D>(m_selectedEntity)) {
+                auto& rb = reg.get<HBE::ECS::RigidBody2D>(m_selectedEntity);
+                m_ui.label("RigidBody2D", true);
+                m_ui.checkbox("rb_static", "isStatic", rb.isStatic);
+                m_ui.checkbox("rb_grav", "useGravity", rb.useGravity);
+                m_ui.sliderFloat("rb_vx", "velX", rb.velX, -4000.0f, 4000.0f, 1.0f);
+                m_ui.sliderFloat("rb_vy", "velY", rb.velY, -4000.0f, 4000.0f, 1.0f);
+                m_ui.sliderFloat("rb_damp", "linearDamping", rb.linearDamping, 0.0f, 50.0f, 0.25f);
+                m_ui.spacing(6.0f);
+            }
+
+            if (m_ui.button("btn_focus_player", "Select Player")) {
+                m_selectedEntity = m_soldierEntity;
+            }
+            if (m_ui.button("btn_focus_goblin", "Select Goblin")) {
+                m_selectedEntity = m_goblinEntity;
+            }
+        }
+        else {
+            m_ui.label("No entity selected.", true);
+        }
+
+        m_ui.endPanel();
     }
 
-    m_ui.checkbox("cb_debug", "Debug Draw", m_uiDebugDraw);
-    m_debugDraw = m_uiDebugDraw;
+    UIRect con;
+    con.x = 20.0f;
+    con.y = LOGICAL_HEIGHT - 220.0f;
+    con.w = LOGICAL_WIDTH - 40.0f;
+    con.h = 170.0f;
 
-    m_ui.spacing(6.0f);
-
-    m_ui.sliderFloat("sdl_volume", "Volume", m_volume, 0.0f, 1.0f, 0.01f);
-    m_ui.sliderFloat("sld_bright", "Brightness", m_brightness, 0.2f, 2.0f, 0.01f);
-    m_ui.sliderInt("sld_bars", "Stat Bars", m_statBars, 1, 10);
-
-    m_ui.spacing(6.0f);
-
-    if (m_ui.button("btn_3", "Quit")) {
-        m_app->requestQuit();
-    }
-
-    m_ui.endPanel();
-
+    m_console.draw(m_ui, con);
+    
     r2d.endScene();
 
     m_ui.endFrame();
@@ -966,11 +1220,44 @@ void GameLayer::onRender() {
 bool GameLayer::onEvent(HBE::Core::Event& e) {
     using namespace HBE::Core;
 
+    // UI can still receive mouse events
     m_ui.onEvent(e);
 
+    // Toggle console with ~ (grave)
+    if (e.type() == EventType::KeyPressed) {
+        auto& ke = static_cast<KeyPressedEvent&>(e);
+        if (!ke.repeat) {
+
+            // ~ toggles console
+            if (ke.keyScancode == SDL_SCANCODE_GRAVE) {
+                m_console.toggle();
+                e.handled = true;
+                return true;
+            }
+
+            // F1 toggles all dev windows
+            if (ke.keyScancode == SDL_SCANCODE_F1) {
+                bool anyOn = (m_showDevTools || m_showInspector || m_showFpsGraph);
+                m_showDevTools = !anyOn;
+                m_showInspector = !anyOn;
+                m_showFpsGraph = !anyOn;
+                e.handled = true;
+                return true;
+            }
+
+            // Individual toggles
+            if (ke.keyScancode == SDL_SCANCODE_F2) { m_showDevTools = !m_showDevTools; e.handled = true; return true; }
+            if (ke.keyScancode == SDL_SCANCODE_F3) { m_showInspector = !m_showInspector; e.handled = true; return true; }
+            if (ke.keyScancode == SDL_SCANCODE_F4) { m_console.toggle(); e.handled = true; return true; }
+            if (ke.keyScancode == SDL_SCANCODE_F5) { m_showFpsGraph = !m_showFpsGraph; e.handled = true; return true; }
+        }
+    }
+
+    // If console open, it consumes typing + Enter + Esc etc.
+    m_console.onEvent(e);
+    if (e.handled) return true;
+
     if (e.type() == EventType::WindowResize) {
-        auto& re = static_cast<WindowResizeEvent&>(e);
-        (void)re;
         return false;
     }
 

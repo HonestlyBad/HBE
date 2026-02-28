@@ -228,6 +228,12 @@ namespace HBE::Core {
 			m_layers.dispatchEvent(ms);
 			break;
 		}
+		case SDL_EVENT_TEXT_INPUT: {
+			// SDL gives UTF-8 text in e.text.text
+			TextInputEvent tev(e.text.text);
+			m_layers.dispatchEvent(tev);
+			break;
+		}
 		default:
 			break;
 		}

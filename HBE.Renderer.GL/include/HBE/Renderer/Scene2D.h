@@ -50,6 +50,8 @@ namespace HBE::Renderer {
         // if set, entities with Transform2D + RigidBody2D + Collider2D will collide against the tile layer
         void setTileCollisionContext(const TileMap* map, const TileMapLayer* collisionLayer);
 
+        void setCullingEnabled(bool enabled) { m_cullingEnabled = enabled; }
+
         // Physics settings
         void setPhysics2DSettings(const Physics2DSettings& s) { m_physics = s; }
         const Physics2DSettings& physics2DSettings() const { return m_physics; }
@@ -70,6 +72,8 @@ namespace HBE::Renderer {
         HBE::ECS::Registry& registry() { return m_reg; }
         const HBE::ECS::Registry& registry() const { return m_reg; }
 
+        bool cullingEnabled() const { return m_cullingEnabled; }
+
     private:
         HBE::ECS::Registry m_reg;
 
@@ -78,6 +82,8 @@ namespace HBE::Renderer {
         // optional tile collision pointers (not owned)
         const TileMap* m_tileMap = nullptr;
         const TileMapLayer* m_collisionLayer = nullptr;
+
+        bool m_cullingEnabled = true;
     };
 
 } // namespace HBE::Renderer
