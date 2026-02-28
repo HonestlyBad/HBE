@@ -336,7 +336,7 @@ namespace HBE::Renderer {
             viewB = cam->y - halfH;
             viewT = cam->y + halfH;
 
-            canCull = true;
+            canCull = m_cullingEnabled;
         }
 
         for (auto e : m_reg.view<Transform2D, SpriteComponent2D>()) {

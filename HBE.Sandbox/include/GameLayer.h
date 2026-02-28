@@ -1,4 +1,5 @@
 #pragma once
+#include "DevConsole.h"
 
 #include "HBE/Core/Layer.h"
 #include "HBE/Core/FileWatcher.h"
@@ -96,6 +97,21 @@ private:
 
 	HBE::Renderer::EntityID m_goblinEntity = HBE::Renderer::InvalidEntityID;
 	HBE::Renderer::EntityID m_soldierEntity = HBE::Renderer::InvalidEntityID;
+
+	DevConsole m_console{};
+
+	HBE::Renderer::EntityID m_selectedEntity = HBE::Renderer::InvalidEntityID;
+
+	bool m_showDevTools = true;
+	bool m_showInspector = true;
+	bool m_showFpsGraph = true;
+
+	bool m_drawAllColliders = true;
+	bool m_enableCulling = true;
+
+	// FPS graph history
+	std::vector<float> m_fpsHistory;
+	int m_fpsHistoryMax = 120;
 
 	void buildSpritePipeline();
 
