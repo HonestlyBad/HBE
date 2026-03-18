@@ -181,6 +181,9 @@ void GameLayer::onAttach(Application& app) {
     setupHotReloadWatches();
     hotReloadUITheme(); // apply theme at startup (optional, but nice)
 
+    // Load test sound
+    app.audio().loadSound("test", "assets/audio/test_sound.wav");
+
     // choose collision layer by name
     m_collisionLayer = m_tileMap.findLayer("Ground");
     if (!m_collisionLayer) {
@@ -291,7 +294,7 @@ void GameLayer::onAttach(Application& app) {
     // -----------------------------
     auto& reg = m_scene.registry();
 
-    // Tag your initial entities (helps scene save find “Player”/“Goblin”)
+    // Tag your initial entities (helps scene save find ï¿½Playerï¿½/ï¿½Goblinï¿½)
     if (reg.valid(m_soldierEntity)) {
         if (!reg.has<HBE::ECS::TagComponent>(m_soldierEntity))
             reg.emplace<HBE::ECS::TagComponent>(m_soldierEntity, HBE::ECS::TagComponent{ "Player" });
@@ -651,6 +654,11 @@ void GameLayer::onUpdate(float dt) {
     // fullscreen toggle stays in layer for now
     if (HBE::Input::ActionPressed(HBE::Input::Action::FullscreenToggle)) {
         // (left blank like your current file)
+    }
+
+    // Play test sound on T key press
+    if (KeyPressed(SDL_SCANCODE_T)) {
+        m_app->audio().playSound("test");
     }
 
     // ---- stats ----
@@ -1013,7 +1021,7 @@ void GameLayer::onRender() {
 
     r2d.beginScene(uiCam);
 
-    // Bind UI renderer dependencies now that we’re in UI space
+    // Bind UI renderer dependencies now that weï¿½re in UI space
     m_ui.bind(&m_app->renderer2D(), &m_debug, &m_text);
 
     using namespace HBE::Renderer::UI;

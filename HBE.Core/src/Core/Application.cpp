@@ -35,6 +35,11 @@ namespace HBE::Core {
 			return false;
 		}
 
+		if (!m_audio.initialize()) {
+			LogError("Application: Audio init failed.");
+			return false;
+		}
+
 		recalcViewportAndNotify();
 
 		m_initialized = true;
@@ -167,7 +172,7 @@ namespace HBE::Core {
 			break;
 		}
 							   // -------- Window Resize Events ----------
-							   // SDL3 has multiple size-related events. These are the ones you’ll commonly see.
+							   // SDL3 has multiple size-related events. These are the ones youï¿½ll commonly see.
 		case SDL_EVENT_WINDOW_RESIZED:
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
 			recalcViewportAndNotify();

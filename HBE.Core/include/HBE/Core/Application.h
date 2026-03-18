@@ -3,6 +3,7 @@
 #include "HBE/Core/LayerStack.h"
 
 #include "HBE/Platform/SDLPlatform.h"
+#include "HBE/Platform/Audio.h"
 #include "HBE/Renderer/GLRenderer.h"
 #include "HBE/Renderer/Renderer2D.h"
 #include "HBE/Renderer/ResourceCache.h"
@@ -42,6 +43,7 @@ namespace HBE::Core {
 
 		// accessors for layers
 		HBE::Platform::SDLPlatform& platform() { return m_platform; }
+		HBE::Platform::Audio& audio() { return m_audio; }
 		HBE::Renderer::GLRenderer& gl() { return m_gl; }
 		HBE::Renderer::Renderer2D& renderer2D() { return m_renderer2D; }
 		HBE::Renderer::ResourceCache& resources() { return m_resources; }
@@ -62,6 +64,7 @@ namespace HBE::Core {
 		bool m_running = false;
 
 		HBE::Platform::SDLPlatform m_platform;
+		HBE::Platform::Audio m_audio;
 
 		HBE::Renderer::GLRenderer m_gl;
 		HBE::Renderer::Renderer2D m_renderer2D{ m_gl };
