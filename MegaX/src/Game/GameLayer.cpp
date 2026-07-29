@@ -20,7 +20,7 @@ namespace MegaX {
 
 	static constexpr float kLogicalWidth = 1280.0f;
 	static constexpr float kLogicalHeight = 720.0f;
-	static constexpr float kCameraZoom = 3.0f;
+	static constexpr float kCameraZoom = 2.0f;
 
 	void GameLayer::onAttach(HBE::Core::Application& app) {
 		m_app = &app;
@@ -74,12 +74,22 @@ namespace MegaX {
         m_camera.snapTo(startX, startY);
 		app.gl().setCamera(m_camera.camera());
 
+        m_enemies.setPlayerRef(&m_player);
+        m_enemies.setCollision(&m_world.map(), m_ground);
+
         {
             constexpr float kTilePx = 32.0f;
-            const float ex = startX + 5.0f * kTilePx; // X
-            const float eGroundY = 130.0f; // Y
+            const float ex = startX + 5.0f * kTilePx;
+            const float eGroundY = 130.0f;    // or your literal
             if (Enemy* e = m_enemies.spawn(ex, eGroundY, -1)) {
-                e->maxHp();
+                e->startHp = 3;
+
+                // Patrol +/- 3 tiles from spawn X. Use whatever range fits
+                // your test platform -- the enemy will auto-turn on walls
+                // and ledges too, so a wide range is safe.
+                e->setPatrolPath(ex - 3.0f * kTilePx, ex + 3.0f * kTilePx, 1.0f);
+
+                // Re-snapshot HP with the new startHp.
                 e->spawn(ex, eGroundY, -1);
             }
         }
@@ -136,6 +146,8 @@ namespace MegaX {
 		if (m_player.consumeShot(bx, by, bdir)) {
 			m_bullets.spawn(bx, by, bdir);
 
+            m_enemies.notifyGunshot(bx, by);
+
             m_effects.spawnMuzzleFlash(bx, by, bdir);
             // Casings eject from the ~ejection port near the gun body, not the
             // barrel tip: ~5 px in front of the player center, at gun height.
@@ -180,11 +192,14 @@ namespace MegaX {
 		r2d.beginScene(m_camera.camera(), RenderPass::World);
         m_world.render(r2d);
         m_enemies.render(r2d);
+        m_enemies.renderBubbles(m_debug, r2d);
 		m_player.render(r2d);
 		m_bullets.render(r2d);
         m_effects.render(r2d);
 
         if (m_showHitBoxes) {
+            m_enemies.debugDrawBoxes(m_debug, r2d);
+            m_enemies.debugDrawSenses(m_debug, r2d);
             const HBE::Renderer::AABB pb = m_player.hurtbox();
             m_debug.rect(r2d, pb.cx, pb.cy, pb.w, pb.h, 0.35f, 0.55f, 1.0f, 1.0f, false);
             m_enemies.debugDrawBoxes(m_debug, r2d);
