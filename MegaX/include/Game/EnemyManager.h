@@ -2,6 +2,7 @@
 
 #include "Game/Enemy.h"
 
+#include <memory>
 #include <vector>
 
 namespace HBE::Renderer {
@@ -16,12 +17,39 @@ namespace HBE::Renderer {
 
 namespace MegaX {
 
+    enum class Difficulty {
+        Casual,
+        Difficult,
+        Challenging
+    };
+
+    struct DifficultyProfile {
+        float chaseSpeedMul = 1.0f;
+        float sightRangeMul = 1.0f;
+        float hearingRadiusMul = 1.0f;
+        float loseAggroDelayMul = 1.0f;
+        float startHpMul = 1.0f;
+
+        int bulletDamage = 1;
+        float fireCooldownSec = 0.90f;
+        float bulletSpeed = 480.0f;
+        float leadFactor = 0.0f;
+
+        const char* label = "Difficult";
+        float labelR = 1.0f, labelG = 0.9f, labelB = 0.25f;
+    };
+
+    DifficultyProfile MakeProfile(Difficulty d);
+
     class BulletManager;
     class Effects;
     class Player;
 
     class EnemyManager {
     public:
+        EnemyManager();
+        ~EnemyManager();
+
         bool init(HBE::Renderer::ResourceCache& resources,
             HBE::Renderer::Mesh* quadMesh,
             HBE::Renderer::GLShader* spriteShader);
@@ -29,36 +57,27 @@ namespace MegaX {
         Enemy* spawn(float x, float groundY, int facing);
 
         int checkBulletHits(BulletManager& bullets, Effects* effects,
-            int damagePerBullet = 1);
 
-        // Item 09: needs player+collision refs set BEFORE update(). Call
-        // both once in GameLayer::onAttach after init/spawn.
+            int damagePerBullet = 1);
         void setPlayerRef(const Player* p) { m_player = p; }
         void setCollision(const HBE::Renderer::TileMap* map,
             const HBE::Renderer::TileMapLayer* solidLayer);
 
         void update(float dt);
         void render(HBE::Renderer::Renderer2D& r2d);
-
-        // Item 08 debug boxes (hitbox/hurtbox outlines).
         void debugDrawBoxes(HBE::Renderer::DebugDraw2D& dbg,
             HBE::Renderer::Renderer2D& r2d) const;
-
-        // Item 09: always-on "?" and "!" bubbles above each enemy.
-        // Called every frame regardless of the B toggle so gameplay
-        // feedback is always visible.
         void renderBubbles(HBE::Renderer::DebugDraw2D& dbg,
             HBE::Renderer::Renderer2D& r2d) const;
-
-        // Item 09: draws each enemy's vision cone + hearing radius.
-        // Gated by the B toggle in GameLayer.
         void debugDrawSenses(HBE::Renderer::DebugDraw2D& dbg,
             HBE::Renderer::Renderer2D& r2d) const;
-
-        // Item 09: broadcast a gunshot ping from (sx, sy). Each alive
-        // enemy within its own `gunshotHearRadius` gets bumped to
-        // Suspicious (see Enemy::onHeardGunshot).
         void notifyGunshot(float sx, float sy);
+        void setDifficulty(Difficulty d);
+        Difficulty difficulty() const { return m_difficulty; }
+        const DifficultyProfile& profile() const { return m_profile; }
+
+        class EnemyBulletManager& enemyBullets();
+        const class EnemyBulletManager& enemyBullets() const;
 
         int aliveCount() const;
         const std::vector<Enemy>& enemies() const { return m_enemies; }
@@ -75,6 +94,11 @@ namespace MegaX {
         const Player* m_player = nullptr;
         const HBE::Renderer::TileMap* m_map = nullptr;
         const HBE::Renderer::TileMapLayer* m_solid = nullptr;
+
+        Difficulty m_difficulty = Difficulty::Difficult;
+        DifficultyProfile m_profile{};
+
+        std::unique_ptr<class EnemyBulletManager> m_enemyBullets;
 
         std::vector<Enemy> m_enemies;
     };

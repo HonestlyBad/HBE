@@ -1,4 +1,5 @@
 #include "Game/EnemyManager.h"
+#include "Game/EnemyBullet.h"
 
 #include "Game/Bullet.h"
 #include "Game/Effects.h"
@@ -14,9 +15,62 @@
 
 using namespace HBE::Renderer;
 
+
+
 namespace MegaX {
 
-    // -------------------------------------------------------------- init / spawn
+    DifficultyProfile MakeProfile(Difficulty d) {
+        DifficultyProfile p{};
+        switch (d) {
+        case Difficulty::Casual:
+            p.chaseSpeedMul = 0.50f;
+            p.sightRangeMul = 0.75f;
+            p.hearingRadiusMul = 0.75f;
+            p.loseAggroDelayMul = 0.55f;
+            p.startHpMul = 0.66f;
+            p.bulletDamage = 1;
+            p.fireCooldownSec = 1.60f;
+            p.bulletSpeed = 380.0f;
+            p.leadFactor = 0.0f;
+            p.label = "Casual";
+            p.labelR = 0.35f; p.labelG = 1.0f; p.labelB = 0.35f; // green
+            break;
+        case Difficulty::Difficult:
+            p.chaseSpeedMul = 1.35f;
+            p.sightRangeMul = 1.10f;
+            p.hearingRadiusMul = 1.10f;
+            p.loseAggroDelayMul = 1.20f;
+            p.startHpMul = 1.00f;
+            p.bulletDamage = 1;
+            p.fireCooldownSec = 0.90f;
+            p.bulletSpeed = 480.0f;
+            p.leadFactor = 0.0f;
+            p.label = "Difficult";
+            p.labelR = 1.0f; p.labelG = 0.9f; p.labelB = 0.25f; // yellow
+            break;
+        case Difficulty::Challenging:
+            p.chaseSpeedMul = 1.85f;
+            p.sightRangeMul = 1.35f;
+            p.hearingRadiusMul = 1.25f;
+            p.loseAggroDelayMul = 2.00f;
+            p.startHpMul = 1.66f;
+            p.bulletDamage = 2;
+            p.fireCooldownSec = 0.55f;
+            p.bulletSpeed = 560.0f;
+            p.leadFactor = 1.0f;
+            p.label = "Challenging";
+            p.labelR = 1.0f; p.labelG = 0.3f; p.labelB = 0.3f; // red
+            break;
+        }
+        return p;
+    }
+
+    EnemyManager::EnemyManager() = default;
+    EnemyManager::~EnemyManager() = default;
+
+    EnemyBulletManager& EnemyManager::enemyBullets() { return *m_enemyBullets; }
+    const EnemyBulletManager& EnemyManager::enemyBullets() const { return *m_enemyBullets; }
+
     bool EnemyManager::init(ResourceCache& resources, Mesh* quadMesh, GLShader* spriteShader) {
         if (!quadMesh || !spriteShader) {
             HBE::Core::LogError("EnemyManager::init: quadMesh or spriteShader is null.");
@@ -25,6 +79,15 @@ namespace MegaX {
         m_resources = &resources;
         m_quadMesh = quadMesh;
         m_spriteShader = spriteShader;
+
+        m_enemyBullets = std::make_unique<EnemyBulletManager>();
+        if (!m_enemyBullets->init(resources, quadMesh, spriteShader)) {
+            HBE::Core::LogError("EnemyManager::init: enemy bullet manager init failed.");
+            return false;
+        }
+
+        m_difficulty = Difficulty::Difficult;
+        m_profile    = MakeProfile(m_difficulty);
         return true;
     }
 
@@ -36,21 +99,33 @@ namespace MegaX {
             m_enemies.pop_back();
             return nullptr;
         }
-        // Wire the collision refs BEFORE spawn so patrol probes and physics
-        // work on the first tick.
         if (m_map && m_solid) e.setCollision(m_map, m_solid);
         e.spawn(x, groundY, facing);
+
+        e.snapshotBaseStats();
+        e.applyDifficulty(m_profile);
+        e.setFireCallback(
+            [](void* ctx, float sx, float sy, float aimX, float aimY, float speed, int damage) {
+                static_cast<EnemyManager*>(ctx)->m_enemyBullets->spawn(sx, sy, aimX, aimY, speed, damage);
+            },
+            this);
         return &e;
+    }
+
+    void EnemyManager::setDifficulty(Difficulty d) {
+        m_difficulty = d;
+        m_profile    = MakeProfile(d);
+        for (auto& e : m_enemies) {
+            if (!e.isAlive()) continue;
+            e.applyDifficulty(m_profile);
+        }
     }
 
     void EnemyManager::setCollision(const TileMap* map, const TileMapLayer* solid) {
         m_map = map;
         m_solid = solid;
-        // Retro-wire any enemies that spawned before setCollision was called.
         for (auto& e : m_enemies) e.setCollision(m_map, m_solid);
     }
-
-    // -------------------------------------------------------- bullet hit test
     int EnemyManager::checkBulletHits(BulletManager& bullets, Effects* effects, int damagePerBullet) {
         if (m_enemies.empty()) return 0;
         int hits = 0;
@@ -73,9 +148,9 @@ namespace MegaX {
         return hits;
     }
 
-    // ------------------------------------------------------------ update / render
     void EnemyManager::update(float dt) {
-        if (!m_player) return;   // GameLayer must call setPlayerRef first
+        if (!m_player) return;
+
         for (auto& e : m_enemies) e.tick(dt, *m_player);
         m_enemies.erase(
             std::remove_if(m_enemies.begin(), m_enemies.end(),

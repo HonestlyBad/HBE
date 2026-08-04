@@ -25,6 +25,10 @@ namespace MegaX {
 			HBE::Renderer::Mesh* quadMesh,
 			const std::string& logicalMapPath);
 
+		bool reload(HBE::Renderer::Renderer2D& r2d, HBE::Renderer::ResourceCache& resources);
+
+		const std::string& logicalMapPath() const { return m_logicalMapPath; }
+
 		void update(float dt);
 
 		void render(HBE::Renderer::Renderer2D& r2d);
@@ -46,6 +50,7 @@ namespace MegaX {
 		HBE::Renderer::TileMap m_map{};
 		HBE::Renderer::TileMapRenderer m_renderer{};
 		bool m_loaded = false;
+		std::string m_logicalMapPath{};
 
 		HBE::Renderer::GLShader* m_spriteShader = nullptr;
 		HBE::Renderer::Mesh* m_quadMesh = nullptr;

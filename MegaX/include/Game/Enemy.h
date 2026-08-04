@@ -15,6 +15,7 @@ namespace HBE::Renderer {
 namespace MegaX {
 
 	class Player;
+	struct DifficultyProfile;
 
 	class Enemy {
 	public:
@@ -41,6 +42,17 @@ namespace MegaX {
 		void tick(float dt, const Player& player);
 		void render(HBE::Renderer::Renderer2D& r2d);
 		void onHeardGunshot(float sourceX, float sourceY);
+
+		void applyDifficulty(const DifficultyProfile& p);
+
+		void snapshotBaseStats();
+
+		void muzzleWorldPos(float& mx, float& my) const;
+
+		using FireFn = void(*)(void* ctx, float sx, float sy,
+		                       float aimX, float aimY,
+		                       float speed, int damage);
+		void setFireCallback(FireFn fn, void* ctx) { m_fireFn = fn; m_fireCtx = ctx; }
 
 		bool takeDamage(int amount);
 
@@ -102,13 +114,24 @@ namespace MegaX {
 
 		float patrolWaitAtEnd = 1.0f;
 
-		float hearingRadius = 140.0f;
+		float hearingRadius = 70.0f;
 		float minPlayerVxToHear = 40.0f;
-		float gunshotHearRadius = 380.0f;
+		float gunshotHearRadius = 140.0f;
 
 		float sightRange = 260.0f;
 		float sightHalfAngleDeg = 35.0f;
 		float eyeHeightAboveFeet = 32.0f;
+		float shootingRange = 360.0f;
+		float standoffFrac = 0.5f;
+		float standoffDeadzone = 16.0f;
+
+		int   bulletDamage    = 1;
+		float fireCooldownSec = 0.90f;
+		float bulletSpeed     = 480.0f;
+		float leadFactor      = 0.0f;
+		float muzzleForwardX  = 22.0f;
+		float muzzleAboveFeet = 26.0f;
+		float shootingLosStep = 12.0f;
 
 		float suspicionDuration = 1.20f;
 		float alertLatchTime = 0.20f;
@@ -143,6 +166,7 @@ namespace MegaX {
 			void tickChase(float dt, const Player& player);
 			void tickSearch(float dt, const Player& player);
 			void tickReturn(float dt, const Player& player);
+			void tickShooting(float dt, const Player& player);
 
 			float m_x = 0.0f;
 			float m_y = 0.0f;
@@ -190,5 +214,15 @@ namespace MegaX {
 
 			HBE::Renderer::Material m_material{};
 			HBE::Renderer::RenderItem m_item{};
+
+			float  m_fireCooldown = 0.0f;
+			FireFn m_fireFn  = nullptr;
+			void*  m_fireCtx = nullptr;
+
+			float m_baseChaseSpeed     = 0.0f;
+			float m_baseSightRange     = 0.0f;
+			float m_baseHearingRadius  = 0.0f;
+			float m_baseLoseAggroDelay = 0.0f;
+			int   m_baseStartHp        = 0;
 	};
 }

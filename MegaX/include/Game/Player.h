@@ -65,6 +65,14 @@ namespace MegaX {
 		Mode mode() const { return m_mode; }
 		void toggleMode() { m_mode = (m_mode == Mode::Play) ? Mode::Ghost : Mode::Play; }
 
+		int hp() const { return m_hp; }
+		int maxHp() const { return startHp; }
+		bool isInvulnerable() const { return m_invulnTimer > 0.0f; }
+		bool takeDamage(int amount, int knockbackDir);
+
+		void refillHp() { m_hp = startHp; m_hurtFlashTimer = 0.0f; }
+		void resetForRespawn();
+
 		void setHelmet(bool on);
 		void toggleHelmet() { setHelmet(!m_helmet); }
 		bool hasHelmet() const { return m_helmet; }
@@ -77,6 +85,11 @@ namespace MegaX {
 		float gravity   = 2100.0f;  // downward acceleration
 		float jumpSpeed = 640.0f;   // initial jump velocity (up)
 		float maxFall   = 900.0f;   // terminal velocity
+
+		int startHp = 5;
+		float invulnDuration = 0.55f;
+		float hurtFlashTime = 0.20f;
+		float knockbackImpulse = 260.0f;
 
 	private:
 		void updateGhost(float dt);
@@ -105,6 +118,10 @@ namespace MegaX {
 		bool m_crouchHeld  = false;
 		bool m_firePressed = false;
 		bool m_fireHeld    = false;
+
+		int m_hp = 5;
+		float m_invulnTimer = 0.0f;
+		float m_hurtFlashTimer = 0.0f;
 
 		bool m_landedThisFrame = false;
 		int m_groundTileId = 0;

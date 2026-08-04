@@ -70,6 +70,7 @@
     <ClInclude Include="include\Game\Effects.h" />
     <ClInclude Include="include\Game\Enemy.h" />
     <ClInclude Include="include\Game\EnemyManager.h" />
+    <ClInclude Include="include\Game\EnemyBullet.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Game\GameLayer.cpp" />
@@ -80,5 +81,6 @@
     <ClCompile Include="src\Game\Effects.cpp" />
     <ClCompile Include="src\Game\Enemy.cpp" />
     <ClCompile Include="src\Game\EnemyManager.cpp" />
+    <ClCompile Include="src\Game\EnemyBullet.cpp" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 #include "Game/Enemy.h"
+#include "Game/EnemyManager.h"   // DifficultyProfile (Item 10)
 #include "Game/Player.h"
 
 #include "HBE/Renderer/ResourceCache.h"
@@ -108,6 +109,7 @@ namespace MegaX {
         m_patrolTargetSign = m_facing;   // head in current facing dir first
         m_lastKnownX = m_x;
         m_lastKnownY = m_y;
+        m_fireCooldown = 0.0f;
 
         setAnimState(AnimState::Idle);
     }
@@ -321,17 +323,29 @@ namespace MegaX {
         }
 
         faceX(player.x());
-        m_vx = static_cast<float>(m_facing) * chaseSpeed;
+
+        const float dx = player.x() - m_x;
+        const float adx = std::fabs(dx);
+        const float standoff = shootingRange * standoffFrac;
+        int moveDir = 0;
+        if (adx > standoff + standoffDeadzone)      moveDir = m_facing;   // advance
+        else if (adx < standoff - standoffDeadzone) moveDir = -m_facing;  // back off
+        // else: within the deadzone -> hold ground and (later) shoot
+        m_vx = static_cast<float>(moveDir) * chaseSpeed;
 
         if (m_grounded && m_jumpCooldown <= 0.0f) {
             const float dyToPlayer = player.y() - m_y;
-            const bool wantJump = (dyToPlayer > 24.0f) || wallInFront() || ledgeInFront();
+            const bool advancing = (moveDir == m_facing) && moveDir != 0;
+            const bool wantJump = (dyToPlayer > 24.0f) ||
+                (advancing && (wallInFront() || ledgeInFront()));
             if (wantJump) {
                 m_vy = jumpSpeed;
                 m_grounded = false;
                 m_jumpCooldown = chaseJumpCooldown;
             }
         }
+
+        tickShooting(dt, player);
 
         const AABB pb = player.hurtbox();
         const bool crouching = pb.h < 34.0f;
@@ -381,6 +395,35 @@ namespace MegaX {
         m_vx = static_cast<float>(m_facing) * moveSpeed;
         if (wallInFront()) enter(AIState::Patrol);
         (void)dt;
+    }
+
+    void Enemy::tickShooting(float dt, const Player& player) {
+        if (m_fireCooldown > 0.0f) m_fireCooldown -= dt;
+
+        if (!m_fireFn) return;
+        if (!m_lastSeen) return;
+
+        const float dx = player.x() - m_x;
+        const float dy = player.y() - m_y;
+        if (dx * dx + dy * dy > shootingRange * shootingRange) return;
+
+        if (m_fireCooldown > 0.0f) return;
+
+        float mx, my;
+        muzzleWorldPos(mx, my);
+
+        float aimX = player.x();
+        float aimY = player.y();
+        if (leadFactor > 0.0001f && bulletSpeed > 0.0f) {
+            const float toPlayerX = aimX - mx;
+            const float toPlayerY = aimY - my;
+            const float dist = std::sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY);
+            const float flight = dist / bulletSpeed;
+            aimX = player.x() + player.velX() * flight * leadFactor;
+        }
+
+        m_fireFn(m_fireCtx, mx, my, aimX, aimY, bulletSpeed, bulletDamage);
+        m_fireCooldown = fireCooldownSec;
     }
 
     void Enemy::applyPhysics(float dt) {
@@ -464,5 +507,42 @@ namespace MegaX {
         if (m_state == AIState::Patrol || m_state == AIState::Return) {
             enter(AIState::Suspicious);
         }
+    }
+
+    // ---------------------------------------------------------------- Item 10
+    void Enemy::snapshotBaseStats() {
+        m_baseChaseSpeed     = chaseSpeed;
+        m_baseSightRange     = sightRange;
+        m_baseHearingRadius  = hearingRadius;
+        m_baseLoseAggroDelay = loseAggroDelay;
+        m_baseStartHp        = startHp;
+    }
+
+    void Enemy::applyDifficulty(const DifficultyProfile& p) {
+        // Fresh multiply from BASE snapshot -> idempotent switching.
+        chaseSpeed     = m_baseChaseSpeed     * p.chaseSpeedMul;
+        sightRange     = m_baseSightRange     * p.sightRangeMul;
+        hearingRadius  = m_baseHearingRadius  * p.hearingRadiusMul;
+        loseAggroDelay = m_baseLoseAggroDelay * p.loseAggroDelayMul;
+
+        // HP scales relative to baseStartHp. Casual truncates fractions
+        // downward via int() -- intended; matches how squishy Casual should feel.
+        const int newStart = std::max(1, static_cast<int>(m_baseStartHp * p.startHpMul));
+        startHp = newStart;
+        m_maxHp = newStart;
+        // Live enemies keep their current HP when difficulty changes mid-fight;
+        // only the ceiling (m_maxHp) moves. Uncomment to refill instead:
+        //   if (m_hp > m_maxHp) m_hp = m_maxHp;
+
+        // Raw shooting values (no base snapshot -- these are the profile's own).
+        bulletDamage    = p.bulletDamage;
+        fireCooldownSec = p.fireCooldownSec;
+        bulletSpeed     = p.bulletSpeed;
+        leadFactor      = p.leadFactor;
+    }
+
+    void Enemy::muzzleWorldPos(float& mx, float& my) const {
+        mx = m_x + static_cast<float>(m_facing) * muzzleForwardX;
+        my = m_feetY + muzzleAboveFeet;
     }
 }

@@ -278,6 +278,13 @@ namespace MegaX {
         m_initialized = false;
     }
 
+    void Effects::clear() {
+        if (!m_initialized) return;
+        if (m_ps) m_ps->clear();
+        m_casings.clear();
+        m_walkAccum = 0.0f;
+    }
+
     void Effects::colorForTile(int tileId, float& r, float& g, float& b) const {
         r = 0.82f; g = 0.72f; b = 0.55f;
         if (tileId <= 0) return;

@@ -1,21 +1,8 @@
 #pragma once
 
-// NOTE: we deliberately do NOT include "HBE/Renderer/ParticleSystem.h" here.
-// That header transitively pulls in Scene2D.h -> SpriteAnimationStateMachine.h
-// -> SpriteRenderer2D.h, which defines `class HBE::Renderer::SpriteRenderer2D`.
-// Player.h already includes "HBE/Renderer/Sprite2D.h", which ALSO defines a
-// class with the exact same name. Any translation unit that sees both headers
-// (e.g. GameLayer.cpp, which includes both Player.h and Effects.h) fails with
-// C2011 (SpriteRenderer2D redefinition). Until the engine consolidates those
-// two headers, keep ParticleSystem.h out of this header and hold the system
-// through a pimpl-style unique_ptr so only Effects.cpp sees it.
-//
-// The other engine headers below (Material / RenderItem / TileCollision) are
-// header-hygiene safe -- none pull Scene2D or SpriteRenderer2D in.
-
 #include "HBE/Renderer/Material.h"
 #include "HBE/Renderer/RenderItem.h"
-#include "HBE/Renderer/TileCollision.h"   // brings TileMap.h (TileMap + TileMapLayer)
+#include "HBE/Renderer/TileCollision.h"
 
 #include <array>
 #include <memory>
@@ -46,6 +33,8 @@ namespace MegaX {
 
 		void shutdown();
 
+		void clear();
+
 		void spawnMuzzleFlash(float x, float y, int dir);
 		void spawnCasing(float x, float y, int dir);
 		void spawnLandingDust(float feetX, float feetY, int tileId);
@@ -63,19 +52,17 @@ namespace MegaX {
 	private:
 		void colorForTile(int tileId, float& r, float& g, float& b) const;
 
-		// Casings are simulated game-side (not as particles) so they can
-		// collide + bounce on the tilemap. See updateCasings / renderCasings.
 		struct Casing {
 			float x = 0.0f, y = 0.0f;
 			float vx = 0.0f, vy = 0.0f;
-			float angle = 0.0f;        // radians
+			float angle = 0.0f;
 			float angVel = 0.0f;
-			float size = 3.0f;         // half-extent in world px (quad = size x size)
-			float life = 0.0f;         // seconds remaining
+			float size = 3.0f;
+			float life = 0.0f;
 			float maxLife = 1.0f;
 			float r = 0.95f, g = 0.78f, b = 0.25f;
 			bool  alive = true;
-			bool  resting = false;     // stopped bouncing, just fading
+			bool  resting = false;
 		};
 
 		void updateCasings(float dt);

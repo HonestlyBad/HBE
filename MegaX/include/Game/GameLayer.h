@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HBE/Core/Layer.h"
+#include "HBE/Core/FileWatcher.h"
 #include "HBE/Renderer/CameraController.h"
 #include "HBE/Renderer/DebugDraw2D.h"
 
@@ -20,8 +21,16 @@ namespace MegaX {
 		void onUpdate(float dt) override;
 		void onRender() override;
 
+		Difficulty m_difficulty = Difficulty::Difficult;
+
 	private:
 		void buildSpritePipeline();
+		void drawHud(HBE::Renderer::Renderer2D& r2d);
+		void spawnDemoEnemies();
+		bool reloadScene(bool alsoReloadMap);
+		void clearTransientEntites();
+		void hotReloadShader();
+		void setupHotReloadWatches();
 		
 		HBE::Core::Application* m_app = nullptr;
 		
@@ -36,7 +45,14 @@ namespace MegaX {
 		EnemyManager m_enemies{};
 		const HBE::Renderer::TileMapLayer* m_ground = nullptr;
 
+		HBE::Core::FileWatcher m_watcher{};
 		HBE::Renderer::DebugDraw2D m_debug{};
 		bool m_showHitBoxes = false;
+
+		std::string m_tileMapPath = "maps/level_01.json";
+		std::string m_spriteVsPath = "shaders/sprite.vert";
+		std::string m_spriteFsPath = "shaders/sprite.frag";
+		float m_startX = 0.0f;
+		float m_startY = 0.0f;
 	};
 }

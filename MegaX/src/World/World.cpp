@@ -31,6 +31,7 @@ namespace MegaX {
 		m_animClock = 0.0f;
 		m_spriteShader = spriteShader;
 		m_quadMesh = quadMesh;
+		m_logicalMapPath = logicalMapPath;
 
 		const std::string absPath = HBE::Core::AssetPaths::Resolve(logicalMapPath);
 
@@ -57,6 +58,56 @@ namespace MegaX {
 			+ std::to_string(m_map.layers.size()) + " layers, "
 			+ std::to_string(m_animatedTiles.size()) + " animated tiles, "
 			+ std::to_string(instanceCount) + " instances).");
+		return true;
+	}
+
+	bool World::reload(Renderer2D& r2d, ResourceCache& resources) {
+		if (m_logicalMapPath.empty()) {
+			HBE::Core::LogError("World::reload: no prior successful load(); ignoring.");
+			return false;
+		}
+		if (!m_spriteShader || !m_quadMesh) {
+			HBE::Core::LogError("World::reload: spriteShader/quadMesh not cached; ignoring.");
+			return false;
+		}
+
+		TileMap backupMap = m_map;
+		std::vector<AnimatedTile> backupAnims = m_animatedTiles;
+		bool backupLoaded = m_loaded;
+		float backupAnimClock = m_animClock;
+
+		m_map = TileMap{};
+		m_animatedTiles.clear();
+		m_animClock = 0.0f;
+		m_loaded = false;
+
+		const std::string absPath = HBE::Core::AssetPaths::Resolve(m_logicalMapPath);
+
+		std::string err;
+		if (!TileMapLoader::loadFromJsonFile(absPath, m_map, &err)) {
+			HBE::Core::LogError("World::reload: failed to load '" + m_logicalMapPath + "': " + err + " -- restoring previous map..");
+			m_map = std::move(backupMap);
+			m_animatedTiles = std::move(backupAnims);
+			m_loaded = backupLoaded;
+			m_animClock = backupAnimClock;
+			return false;
+		}
+
+		if (!m_renderer.build(r2d, resources, m_spriteShader, m_quadMesh, m_map)) {
+			HBE::Core::LogError("World::reload: TileMapRenderer::build failed for '" + m_logicalMapPath + "': " + err + " -- restoring previous map.");
+			m_map = std::move(backupMap);
+			m_animatedTiles = std::move(backupAnims);
+			m_loaded = backupLoaded;
+			m_animClock = backupAnimClock;
+
+			m_renderer.build(r2d, resources, m_spriteShader, m_quadMesh, m_map);
+			return false;
+		}
+
+		loadAnimatedTiles(resources, absPath);
+		m_loaded = true;
+
+		HBE::Core::LogInfo("World::reload: '" + m_logicalMapPath + "' reloaded (" + std::to_string(m_map.tilesets.size()) + " tilesets, " + std::to_string(m_map.layers.size()) + " layers).");
 		return true;
 	}
 

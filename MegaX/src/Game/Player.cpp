@@ -11,62 +11,53 @@
 using namespace HBE::Renderer;
 
 namespace MegaX {
-
-	// ---- sprite sheet grid (10 cols x 14 rows, 75x48 px cells) --------------
+		
 	static constexpr int kFrameW = 75;
 	static constexpr int kFrameH = 48;
 	static constexpr float kPixelScale = 1.0f;
 
 	static constexpr int kIdleRow = 3, kIdleCol0 = 0, kIdleCol1 = 3;
 	static constexpr int kWalkRow = 6, kWalkCol0 = 0, kWalkCol1 = 9;
-	static constexpr int kCrouchRow = 1, kCrouchCol0 = 0, kCrouchCol1 = 5;   // prone crawl (6 frames)
-	static constexpr int kJumpRow = 13;                     // last row (6 frames)
-	static constexpr int kRiseCol0 = 0, kRiseCol1 = 2;      // ascent -> apex
-	static constexpr int kFallCol0 = 3, kFallCol1 = 3;      // fall (single frame)
-	static constexpr int kLandCol0 = 4, kLandCol1 = 5;      // landing (2 frames)
+	static constexpr int kCrouchRow = 1, kCrouchCol0 = 0, kCrouchCol1 = 5;
+	static constexpr int kJumpRow = 13;
+	static constexpr int kRiseCol0 = 0, kRiseCol1 = 2;
+	static constexpr int kFallCol0 = 3, kFallCol1 = 3;
+	static constexpr int kLandCol0 = 4, kLandCol1 = 5;
 
-	// shoot poses
-	static constexpr int kShootStandRow = 10, kShootStandCol0 = 0, kShootStandCol1 = 1;  // standing + muzzle flash
-	static constexpr int kShootWalkRow  = 5,  kShootWalkCol0  = 0, kShootWalkCol1  = 9;  // run-and-gun
-	static constexpr int kShootAirRow   = 8,  kShootAirCol0   = 0, kShootAirCol1   = 2;  // airborne shoot
+	static constexpr int kShootStandRow = 10, kShootStandCol0 = 0, kShootStandCol1 = 1;
+	static constexpr int kShootWalkRow  = 5,  kShootWalkCol0  = 0, kShootWalkCol1  = 9;
+	static constexpr int kShootAirRow   = 8,  kShootAirCol0   = 0, kShootAirCol1   = 2;
 
 	static constexpr float kIdleFps   = 8.0f;
 	static constexpr float kWalkFps   = 14.0f;
 	static constexpr float kCrouchFps = 10.0f;
 	static constexpr float kJumpFps   = 12.0f;
 	static constexpr float kShootFps  = 14.0f;
-
-	// ---- physics tunables --------------------------------------------------
+		
 	static constexpr float kBoxW       = 24.0f;
 	static constexpr float kBoxStandH  = 40.0f;
 	static constexpr float kBoxCrouchH = 24.0f;
 
-	static constexpr float kCrouchSpeedMul = 0.5f;   // half speed while crouched
-	static constexpr float kLandTime = 0.16f;        // landing anim hold (~2 frames @12fps)
+	static constexpr float kCrouchSpeedMul = 0.5f;
+	static constexpr float kLandTime = 0.16f;
 
-	static constexpr float kCoyote  = 0.08f;   // seconds
-	static constexpr float kJumpBuf = 0.10f;   // seconds
-	static constexpr float kJumpCut = 180.0f;  // velY clamp when jump released early
-
-	// ---- shooting tunables (frame-local: +x forward, +y up) ----------------
-	static constexpr float kFireCooldown = 0.15f;   // seconds between shots (auto-fire while held)
-	static constexpr float kShootHold    = 0.22f;   // how long the shoot pose stays up
-	static constexpr float kRecoilImpulse = 120.0f; // air knockback velocity (px/s)
-	static constexpr float kRecoilDamp    = 7.0f;   // recoil decay rate
+	static constexpr float kCoyote  = 0.08f;
+	static constexpr float kJumpBuf = 0.10f;
+	static constexpr float kJumpCut = 180.0f;
+		
+	static constexpr float kFireCooldown = 0.15f;
+	static constexpr float kShootHold    = 0.22f;
+	static constexpr float kRecoilImpulse = 120.0f;
+	static constexpr float kRecoilDamp    = 7.0f;
 
 	static constexpr float kMuzzleFwdStand = 30.0f, kMuzzleUpStand = 1.0f;
 	static constexpr float kMuzzleFwdAir   = 30.0f, kMuzzleUpAir   = 2.0f;
 	static constexpr float kMuzzleFwdCrouch = 28.0f, kMuzzleUpCrouch = -14.0f;
-	// Run-and-gun frames draw the gun ~4 px lower than the standing-shoot pose,
-	// so slide the muzzle origin down when the player fires while moving.
 	static constexpr float kMuzzleFwdWalk  = 30.0f, kMuzzleUpWalk  = kMuzzleUpStand - 4.0f;
 
-	// Feet stay at the box bottom; the sprite's frame-bottom is placed there.
 	static float feetToCenterOffset(float boxH) {
-		return kFrameH * kPixelScale * 0.5f - boxH * 0.5f;   // add to box.cy -> posY
+		return kFrameH * kPixelScale * 0.5f - boxH * 0.5f;
 	}
-
-	// ------------------------------------------------------------------ init
 
 	bool Player::init(ResourceCache& resources, Mesh* quadMesh, GLShader* spriteShader) {
 		m_helmSheet = SpriteRenderer2D::DeclareSpriteSheet(
@@ -86,9 +77,6 @@ namespace MegaX {
 		}
 
 		m_activeSheet = m_helmet ? m_helmSheet : m_noHelmSheet;
-
-		// All animations reference &m_activeSheet, whose *contents* are swapped
-		// by setHelmet() -- so a helmet toggle re-skins every animation at once.
 		m_idleAnim   = SpriteAnimation(&m_activeSheet, kIdleCol0,   kIdleCol1,   kIdleRow,   kIdleFps,   true);
 		m_walkAnim   = SpriteAnimation(&m_activeSheet, kWalkCol0,   kWalkCol1,   kWalkRow,   kWalkFps,   true);
 		m_crouchAnim = SpriteAnimation(&m_activeSheet, kCrouchCol0, kCrouchCol1, kCrouchRow, kCrouchFps, true);
@@ -126,6 +114,9 @@ namespace MegaX {
 	}
 
 	void Player::setPosition(float x, float y) {
+		m_hp = startHp;
+		m_invulnTimer = 0.0f;
+		m_hurtFlashTimer = 0.0f;
 		m_x = x; m_y = y;
 		m_vx = m_vy = 0.0f;
 		m_grounded = false;
@@ -139,7 +130,35 @@ namespace MegaX {
 		m_box.cy = y - feetToCenterOffset(m_box.h);   // inverse of render sync
 	}
 
-	// ------------------------------------------------------------------ helpers
+	void Player::resetForRespawn() {
+		m_hp = startHp;
+		m_invulnTimer = 0.0f;
+		m_hurtFlashTimer = 0.0f;
+		m_vx = 0.0f;
+		m_vy = 0.0f;
+		m_inX = 0.0f;
+		m_inY = 0.0f;
+		m_grounded = false;
+		m_crouching = false;
+		m_coyote = 0.0f;
+		m_jumpBuf = 0.0f;
+		m_landTimer = 0.0f;
+		m_landedThisFrame = false;
+		m_groundTileId = 0;
+		m_jumpPressed = false;
+		m_jumpHeld = false;
+		m_crouchHeld = false;
+		m_firePressed = false;
+		m_fireHeld = false;
+		m_fireCooldown = 0.0f;
+		m_shootTimer = 0.0f;
+		m_recoilVx = 0.0f;
+		m_shotPending = false;
+		m_shotX = 0.0f;
+		m_shotY = 0.0f;
+		m_shotDir = m_facing;
+		m_animState = -1;
+	}
 
 	bool Player::boxOverlapsSolid(const AABB& b) const {
 		if (!m_map || !m_collLayer) return false;
@@ -194,27 +213,38 @@ namespace MegaX {
 	void Player::setAnimState(int s) {
 		if (s == m_animState) return;
 		m_animState = s;
-		animForState(s).play(true);   // rewind on entering a state
+		animForState(s).play(true);
 	}
 
-	// ------------------------------------------------------------------ update
-
 	void Player::update(float dt) {
+		if (m_invulnTimer > 0.0f) m_invulnTimer = std::max(0.0f, m_invulnTimer - dt);
+		if (m_hurtFlashTimer > 0.0f) m_hurtFlashTimer = std::max(0.0f, m_hurtFlashTimer - dt);
+
 		if (m_mode == Mode::Ghost) updateGhost(dt);
 		else                       updatePlay(dt);
 
-		m_jumpPressed = false;   // consume the latched one-shot press
-		m_firePressed = false;   // consume the latched fire press
+		m_jumpPressed = false;
+		m_firePressed = false;
 
-		// shared: write transform + advance the current animation
 		m_item.transform.posX = m_x;
 		m_item.transform.posY = m_y;
 		m_item.transform.scaleX = kFrameW * kPixelScale * static_cast<float>(m_facing);
 		m_item.transform.scaleY = kFrameH * kPixelScale;
 
-		// Ghost mode reads as a translucent, bluish "spirit"; Play mode is opaque.
-		m_item.tint = (m_mode == Mode::Ghost) ? Color4{ 0.6f, 0.8f, 1.0f, 0.5f }
-		                                      : Color4{ 1.0f, 1.0f, 1.0f, 1.0f };
+		if (m_mode == Mode::Ghost) {
+			m_item.tint = Color4{ 0.6f, 0.8f, 1.0f, 0.5f };
+		}
+		else if (m_hurtFlashTimer > 0.0f) {
+			const float k = m_hurtFlashTimer / hurtFlashTime;
+			m_item.tint = Color4{ 1.0f, 0.35f + (1.0f - k) * 0.65f, 0.35f + (1.0f - k) * 0.65f, 1.0f };
+		}
+		else if (m_invulnTimer > 0.0f) {
+			const int frame = static_cast<int>(m_invulnTimer * 40.0f);
+			m_item.tint = (frame & 1) ? Color4{ 1.0f, 1.0f, 1.0f, 0.35f } : Color4{ 1.0f, 1.0f, 1.0f, 1.0f };
+		}
+		else {
+			m_item.tint = Color4{ 1.0f, 1.0f,1.0f,1.0f };
+		}
 
 		SpriteAnimation& a = animForState(m_animState < 0 ? 0 : m_animState);
 		a.update(dt);
@@ -372,5 +402,21 @@ namespace MegaX {
 
 	void Player::render(Renderer2D& r2d) {
 		r2d.draw(m_item);
+	}
+
+	bool Player::takeDamage(int amount, int knockbackDir) {
+		if (amount <= 0) return false;
+		if (m_mode == Mode::Ghost) return false;
+		if (m_invulnTimer > 0.0f) return false;
+
+		m_hp = std::max(0, m_hp - amount);
+		m_invulnTimer = invulnDuration;
+		m_hurtFlashTimer = hurtFlashTime;
+
+		if (knockbackDir != 0) {
+			const float dir = (knockbackDir > 0) ? +1.0f : -1.0f;
+			m_vx += dir * knockbackImpulse;
+		}
+		return true;
 	}
 }
