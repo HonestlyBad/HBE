@@ -40,6 +40,14 @@ namespace MegaX {
 		void spawnLandingDust(float feetX, float feetY, int tileId);
 		void spawnBulletImpact(float x, float y, int tileId);
 
+		// enemy
+		void spawnEnemyMuzzleFlash(float x, float y, int dir);
+		void spawnEnemyBulletImpact(float x, float y, int tileId);
+		void spawnEnemyExplosion(float x, float y);
+		void spawnHitSpark(float x, float y, int dir);
+		void spawnBloodSplatter(float x, float y, int dir);
+		void spawnWalkDustBurst(float feetX, float feetY, int tileId);
+
 		void tickWalkDust(float dt, float feetX, float feetY, int tileId, bool moving, bool grounded);
 
 		void update(float dt);

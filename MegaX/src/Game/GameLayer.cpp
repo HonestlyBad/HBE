@@ -1,5 +1,5 @@
 #include "Game/GameLayer.h"
-#include "Game/EnemyBullet.h"   // full type needed for m_enemies.enemyBullets()
+#include "Game/EnemyBullet.h"
 
 #include "HBE/Core/Application.h"
 #include "HBE/Core/AssetPaths.h"
@@ -65,6 +65,7 @@ namespace MegaX {
         if (!m_enemies.init(app.resources(), m_quadMesh, m_spriteShader)) {
             LogError("MegaX GameLayer: enemy manager init failed.");
         }
+        m_enemies.setEffects(&m_effects);   // Item 12: FX dispatch target
 
         if (!m_debug.initialize(app.resources(), m_quadMesh)) {
             LogError("MegaX GameLayer: debug draw init failed (B overlay disabled).");
@@ -168,7 +169,6 @@ namespace MegaX {
 		m_player.setFireInput(firePressed, fireHeld);
 		m_player.update(dt);
 
-        // spawn any bullet the player fired this frame, then advance bullets
 		float bx, by; int bdir;
 		if (m_player.consumeShot(bx, by, bdir)) {
 			m_bullets.spawn(bx, by, bdir);
@@ -176,8 +176,6 @@ namespace MegaX {
             m_enemies.notifyGunshot(bx, by);
 
             m_effects.spawnMuzzleFlash(bx, by, bdir);
-            // Casings eject from the ~ejection port near the gun body, not the
-            // barrel tip: ~5 px in front of the player center, at gun height.
             const float casingX = m_player.x() + static_cast<float>(bdir) * 5.0f;
             m_effects.spawnCasing(casingX, by, bdir);
 		}
@@ -215,6 +213,15 @@ namespace MegaX {
         ebm.update(dt, &m_world.map(), m_ground, m_camera.camera());
 
         {
+            std::vector<EnemyBulletManager::Impact> impacts;
+            if (ebm.consumeImpacts(impacts)) {
+                for (const auto& imp : impacts) {
+                    m_effects.spawnEnemyBulletImpact(imp.x, imp.y, imp.tileId);
+                }
+            }
+        }
+
+        {
             const AABB pb = m_player.hurtbox();
             for (auto& b : ebm.bullets()) {
                 if (!b.alive) continue;
@@ -223,6 +230,7 @@ namespace MegaX {
 
                 const int kbDir = (b.vx >= 0.0f) ? +1 : -1;
                 if (m_player.takeDamage(b.damage, kbDir)) {
+                    m_effects.spawnBloodSplatter(b.x, b.y, kbDir);
                     b.alive = false;
                 }
             }
@@ -316,7 +324,6 @@ namespace MegaX {
             return;
         }
 
-        // Unit quad centered on origin, with UVs. pos.xyz, uv.xy — 6 verts.
         const std::vector<float> quadVerts = {
             -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
              0.5f, -0.5f, 0.0f,  1.0f, 0.0f,

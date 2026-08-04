@@ -66,6 +66,15 @@ namespace MegaX {
 		bool isDying() const { return m_dead && m_deathTimer > 0.0f; }
 		bool isFinished() const { return m_dead && m_deathTimer <= 0.0f; }
 
+		bool landedThisFrame() const { return m_landedThisFrame; }
+		
+		int groundTileId() const { return m_groundTileId; }
+
+		bool justDied() const { return m_justDied; }
+		void consumeJustDied() { m_justDied = false; }
+
+		bool consumeWalkDustPuff(float dt, float period);
+
 		int hp() const { return m_hp; }
 		int maxHp() const{ return m_maxHp; }
 
@@ -224,5 +233,11 @@ namespace MegaX {
 			float m_baseHearingRadius  = 0.0f;
 			float m_baseLoseAggroDelay = 0.0f;
 			int   m_baseStartHp        = 0;
+
+			bool m_landedThisFrame = false;
+			bool m_wasGroundedLast = true;
+			int m_groundTileId = 0;
+			bool m_justDied = false;
+			float m_walkDustAccum = 0.0f;
 	};
 }

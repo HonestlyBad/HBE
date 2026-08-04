@@ -103,6 +103,12 @@ namespace MegaX {
         m_invulnTimer = m_flashTimer = m_deathTimer = 0.0f;
         m_dead = false;
 
+        m_landedThisFrame = false;
+        m_wasGroundedLast = true;
+        m_groundTileId = 0;
+        m_justDied = false;
+        m_walkDustAccum = 0.0f;
+
         m_state = AIState::Patrol;
         m_stateTimer = m_alertLatch = m_hiddenTimer = m_jumpCooldown = 0.0f;
         m_patrolWaitTimer = 0.0f;
@@ -129,6 +135,7 @@ namespace MegaX {
         if (m_hp <= 0) {
             m_hp = 0;
             m_dead = true;
+            m_justDied = true;
             m_hitboxActive = false;
             m_deathTimer = deathFadeTime;
             m_vx = 0.0f;
@@ -156,6 +163,8 @@ namespace MegaX {
     }
 
     void Enemy::tick(float dt, const Player& player) {
+        m_landedThisFrame = false;
+
         if (m_invulnTimer > 0.0f) m_invulnTimer = std::max(0.0f, m_invulnTimer - dt);
         if (m_flashTimer > 0.0f) m_flashTimer = std::max(0.0f, m_flashTimer - dt);
         if (m_jumpCooldown > 0.0f) m_jumpCooldown = std::max(0.0f, m_jumpCooldown - dt);
@@ -432,6 +441,8 @@ namespace MegaX {
 
         m_prevBottom = m_box.cy - m_box.h * 0.5f;
 
+        bool prevGrounded = m_wasGroundedLast;
+
         if (m_map && m_solid) {
             MoveResult2D res = TileCollision::moveAndCollideEx(
                 *m_map, *m_solid, m_box, m_vx, m_vy, dt,
@@ -443,6 +454,25 @@ namespace MegaX {
             m_box.cy += m_vy * dt;
         }
         syncFromBox();
+
+        if (!prevGrounded && m_grounded) {
+            m_landedThisFrame = true;
+        }
+        m_wasGroundedLast = m_grounded;
+
+        if (m_grounded && m_map && m_solid) {
+            const float tw = m_map->worldTileW();
+            const float th = m_map->worldTileH();
+            if (tw > 0.0f && th > 0.0f) {
+                const float probeY = m_feetY - 1.0f;
+                const int tx = static_cast<int>(std::floor(m_x / tw));
+                const int ty = static_cast<int>(std::floor(probeY / th));
+                m_groundTileId = m_solid->at(tx, ty);
+            }
+        }
+        else {
+            m_groundTileId = 0;
+        }
     }
 
     void Enemy::syncFromBox() {
@@ -509,7 +539,6 @@ namespace MegaX {
         }
     }
 
-    // ---------------------------------------------------------------- Item 10
     void Enemy::snapshotBaseStats() {
         m_baseChaseSpeed     = chaseSpeed;
         m_baseSightRange     = sightRange;
@@ -519,22 +548,15 @@ namespace MegaX {
     }
 
     void Enemy::applyDifficulty(const DifficultyProfile& p) {
-        // Fresh multiply from BASE snapshot -> idempotent switching.
         chaseSpeed     = m_baseChaseSpeed     * p.chaseSpeedMul;
         sightRange     = m_baseSightRange     * p.sightRangeMul;
         hearingRadius  = m_baseHearingRadius  * p.hearingRadiusMul;
         loseAggroDelay = m_baseLoseAggroDelay * p.loseAggroDelayMul;
 
-        // HP scales relative to baseStartHp. Casual truncates fractions
-        // downward via int() -- intended; matches how squishy Casual should feel.
         const int newStart = std::max(1, static_cast<int>(m_baseStartHp * p.startHpMul));
         startHp = newStart;
         m_maxHp = newStart;
-        // Live enemies keep their current HP when difficulty changes mid-fight;
-        // only the ceiling (m_maxHp) moves. Uncomment to refill instead:
-        //   if (m_hp > m_maxHp) m_hp = m_maxHp;
 
-        // Raw shooting values (no base snapshot -- these are the profile's own).
         bulletDamage    = p.bulletDamage;
         fireCooldownSec = p.fireCooldownSec;
         bulletSpeed     = p.bulletSpeed;
@@ -544,5 +566,18 @@ namespace MegaX {
     void Enemy::muzzleWorldPos(float& mx, float& my) const {
         mx = m_x + static_cast<float>(m_facing) * muzzleForwardX;
         my = m_feetY + muzzleAboveFeet;
+    }
+
+    bool Enemy::consumeWalkDustPuff(float dt, float period) {
+        const bool moving = std::fabs(m_vx) > 5.0f;
+        const bool grounded = m_grounded;
+        if (!moving || !grounded) {
+            m_walkDustAccum = 0.0f;
+            return false;
+        }
+        m_walkDustAccum += dt;
+        if (m_walkDustAccum < period) return false;
+        m_walkDustAccum -= period;
+        return true;
     }
 }

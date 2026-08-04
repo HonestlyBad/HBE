@@ -223,6 +223,242 @@ namespace MegaX {
         return { chunks, sparks };
     }
 
+    // -- Enemy
+    static EffectDef makeEnemyMuzzleFlash() {
+        EmitterConfig core;
+        core.name = "enemy_muzzle_flash_core";
+        core.emissionRate = 0.0f;
+        core.duration = 0.04f;
+        core.worldSpace = true;
+        core.maxParticles = 6;
+        core.additiveBlend = true;
+        core.bursts.push_back({ 0.0f, 3, 1 });
+
+        core.lifetimeMin = 0.04f; core.lifetimeMax = 0.08f;
+        core.shape = EmitterConfig::Shape::Point;
+        core.speedMin = 0.0f; core.speedMax = 0.0f;
+        core.startSizeMin = 8.0f; core.startSizeMax = 12.0f;
+        core.endSizeMin = 2.0f; core.endSizeMax = 3.0f;
+
+        core.startR = 1.0f; core.startG = 0.55f; core.startB = 0.20f; core.startA = 1.0f;
+        core.endR = 0.9f; core.endG = 0.10f; core.endB = 0.0f; core.endA = 0.0f;
+
+        core.sortLayer = 102;
+
+        EmitterConfig sparks;
+        sparks.name = "enemy_muzzle_flash_sparks";
+        sparks.emissionRate = 0.0f;
+        sparks.duration = 0.05f;
+        sparks.worldSpace = true;
+        sparks.maxParticles = 10;
+        sparks.additiveBlend = true;
+        sparks.bursts.push_back({ 0.0f, 5, 1 });
+
+        sparks.lifetimeMin = 0.06f; sparks.lifetimeMax = 0.12f;
+        sparks.shape = EmitterConfig::Shape::Point;
+        sparks.speedMin = 140.0f; sparks.speedMax = 260.0f;
+
+        sparks.dirMin = -16.0f; sparks.dirMax = 16.0f;
+
+        sparks.gravityY = 0.0f;
+        sparks.drag = 4.0f;
+
+        sparks.startSizeMin = 2.5f; sparks.startSizeMax = 4.0f;
+        sparks.endSizeMin = 0.0f; sparks.endSizeMax = 0.0f;
+
+        sparks.startR = 1.0f; sparks.startG = 0.85f; sparks.startB = 0.25f; sparks.startA = 1.0f;
+        sparks.endR = 1.0f; sparks.endG = 0.20f; sparks.endB = 0.0f; sparks.endA = 0.0f;
+
+        sparks.sortLayer = 102;
+
+        return { core, sparks };
+    }
+
+    static EffectDef makeEnemyBulletImpact() {
+        EmitterConfig chunks;
+        chunks.name = "enemy_bullet_impact_chunks";
+        chunks.emissionRate = 0.0f;
+        chunks.duration = 0.05f;
+        chunks.worldSpace = true;
+        chunks.maxParticles = 16;
+        chunks.bursts.push_back({ 0.0f, 8, 1 });
+
+        chunks.lifetimeMin = 0.20f; chunks.lifetimeMax = 0.36f;
+        chunks.shape = EmitterConfig::Shape::Point;
+        chunks.speedMin = 110.0f; chunks.speedMax = 240.0f;
+        chunks.dirMin = 0.0f; chunks.dirMax = 360.0f;
+
+        chunks.gravityY = -420.0f;
+        chunks.drag = 1.4f;
+
+        chunks.startSizeMin = 3.0f; chunks.startSizeMax = 5.0f;
+        chunks.endSizeMin = 0.0f; chunks.endSizeMax = 0.0f;
+
+        chunks.startR = 0.75f; chunks.startG = 0.70f; chunks.startB = 0.60f; chunks.startA = 1.0f;
+        chunks.endR = 0.55f; chunks.endG = 0.50f; chunks.endB = 0.40f; chunks.endA = 0.0f;
+
+        chunks.sortLayer = 102;
+
+        EmitterConfig sparks;
+        sparks.name = "enemy_bullet_impact_sparks";
+        sparks.emissionRate = 0.0f;
+        sparks.duration = 0.05f;
+        sparks.worldSpace = true;
+        sparks.maxParticles = 16;
+        sparks.additiveBlend = true;
+        sparks.bursts.push_back({ 0.0f, 10, 1 });
+
+        sparks.lifetimeMin = 0.10f; sparks.lifetimeMax = 0.20f;
+        sparks.shape = EmitterConfig::Shape::Point;
+        sparks.speedMin = 160.0f; sparks.speedMax = 320.0f;
+        sparks.dirMin = 0.0f; sparks.dirMax = 360.0f;
+
+        sparks.gravityY = -220.0f;
+        sparks.drag = 1.2f;
+
+        sparks.startSizeMin = 2.5f; sparks.startSizeMax = 4.0f;
+        sparks.endSizeMin = 0.0f; sparks.endSizeMax = 0.0f;
+
+        sparks.startR = 1.0f; sparks.startG = 0.55f; sparks.startB = 0.20f; sparks.startA = 1.0f;
+        sparks.endR = 1.0f; sparks.endG = 0.10f; sparks.endB = 0.0f; sparks.endA = 0.0f;
+
+        sparks.sortLayer = 102;
+
+        return { chunks, sparks };
+    }
+
+    static EffectDef makeEnemyExplosion() {
+        EmitterConfig core;
+        core.name = "enemy_explosion_core";
+        core.emissionRate = 0.0f;
+        core.duration = 0.06f;
+        core.worldSpace = true;
+        core.maxParticles = 10;
+        core.additiveBlend = true;
+        core.bursts.push_back({ 0.0f, 6, 1 });
+
+        core.lifetimeMin = 0.10f; core.lifetimeMax = 0.18f;
+        core.shape = EmitterConfig::Shape::Point;
+        core.speedMin = 0.0f;  core.speedMax = 0.0f;
+        core.startSizeMin = 30.0f; core.startSizeMax = 42.0f;
+        core.endSizeMin = 8.0f;  core.endSizeMax = 12.0f;
+
+        core.startR = 1.0f; core.startG = 1.0f;  core.startB = 0.85f; core.startA = 1.0f;
+        core.endR = 1.0f; core.endG = 0.45f; core.endB = 0.0f;  core.endA = 0.0f;
+
+        core.sortLayer = 103;
+
+        EmitterConfig chunks;
+        chunks.name = "enemy_explosion_chunks";
+        chunks.emissionRate = 0.0f;
+        chunks.duration = 0.05f;
+        chunks.worldSpace = true;
+        chunks.maxParticles = 32;
+        chunks.bursts.push_back({ 0.0f, 20, 1 });
+
+        chunks.lifetimeMin = 0.35f; chunks.lifetimeMax = 0.65f;
+        chunks.shape = EmitterConfig::Shape::Point;
+        chunks.speedMin = 180.0f; chunks.speedMax = 360.0f;
+        chunks.dirMin = 0.0f;   chunks.dirMax = 360.0f;
+
+        chunks.gravityY = -520.0f;
+        chunks.drag = 1.6f;
+
+        chunks.startSizeMin = 4.0f; chunks.startSizeMax = 7.0f;
+        chunks.endSizeMin = 0.0f; chunks.endSizeMax = 0.0f;
+
+        chunks.startR = 1.0f; chunks.startG = 0.55f; chunks.startB = 0.15f; chunks.startA = 1.0f;
+        chunks.endR = 0.4f; chunks.endG = 0.05f; chunks.endB = 0.0f;  chunks.endA = 0.0f;
+
+        chunks.sortLayer = 102;
+
+        EmitterConfig smoke;
+        smoke.name = "enemy_explosion_smoke";
+        smoke.emissionRate = 0.0f;
+        smoke.duration = 0.10f;
+        smoke.worldSpace = true;
+        smoke.maxParticles = 20;
+        smoke.bursts.push_back({ 0.0f, 12, 1 });
+
+        smoke.lifetimeMin = 0.50f; smoke.lifetimeMax = 0.90f;
+        smoke.shape = EmitterConfig::Shape::Point;
+        smoke.speedMin = 20.0f;  smoke.speedMax = 60.0f;
+        smoke.dirMin = 40.0f;   smoke.dirMax = 140.0f;   // rises
+
+        smoke.gravityY = 40.0f;   // slightly buoyant
+        smoke.drag = 1.0f;
+
+        smoke.startSizeMin = 10.0f; smoke.startSizeMax = 16.0f;
+        smoke.endSizeMin = 4.0f;  smoke.endSizeMax = 6.0f;
+
+        smoke.startR = 0.20f; smoke.startG = 0.20f; smoke.startB = 0.20f; smoke.startA = 0.85f;
+        smoke.endR = 0.05f; smoke.endG = 0.05f; smoke.endB = 0.05f; smoke.endA = 0.0f;
+
+        smoke.sortLayer = 101;   // behind chunks + core, in front of world
+
+        return { core, chunks, smoke };
+    }
+
+    static EffectDef makeHitSpark() {
+        EmitterConfig sparks;
+        sparks.name = "hit_spark";
+        sparks.emissionRate = 0.0f;
+        sparks.duration = 0.04f;
+        sparks.worldSpace = true;
+        sparks.maxParticles = 14;
+        sparks.additiveBlend = true;
+        sparks.bursts.push_back({ 0.0f, 8, 1 });
+
+        sparks.lifetimeMin = 0.08f; sparks.lifetimeMax = 0.16f;
+        sparks.shape = EmitterConfig::Shape::Point;
+        sparks.speedMin = 180.0f; sparks.speedMax = 320.0f;
+
+        // Directional cone; spawnHitSpark mirrors for dir < 0.
+        sparks.dirMin = 150.0f; sparks.dirMax = 210.0f;   // back toward the shooter
+
+        sparks.gravityY = -60.0f;
+        sparks.drag = 3.0f;
+
+        sparks.startSizeMin = 2.5f; sparks.startSizeMax = 4.5f;
+        sparks.endSizeMin = 0.0f; sparks.endSizeMax = 0.0f;
+
+        sparks.startR = 1.0f; sparks.startG = 1.0f;  sparks.startB = 0.95f; sparks.startA = 1.0f;
+        sparks.endR = 0.4f; sparks.endG = 0.75f; sparks.endB = 1.0f;  sparks.endA = 0.0f;
+
+        sparks.sortLayer = 103;
+
+        return { sparks };
+    }
+
+    static EffectDef makeBloodSplatter() {
+        EmitterConfig drops;
+        drops.name = "blood_splatter";
+        drops.emissionRate = 0.0f;
+        drops.duration = 0.05f;
+        drops.worldSpace = true;
+        drops.maxParticles = 14;
+        drops.bursts.push_back({ 0.0f, 8, 1 });
+
+        drops.lifetimeMin = 0.20f; drops.lifetimeMax = 0.40f;
+        drops.shape = EmitterConfig::Shape::Point;
+        drops.speedMin = 90.0f;  drops.speedMax = 220.0f;
+
+        drops.dirMin = -35.0f;  drops.dirMax = 35.0f;
+
+        drops.gravityY = -680.0f;
+        drops.drag = 1.2f;
+
+        drops.startSizeMin = 2.5f; drops.startSizeMax = 4.5f;
+        drops.endSizeMin = 0.0f; drops.endSizeMax = 0.0f;
+
+        drops.startR = 0.75f; drops.startG = 0.05f; drops.startB = 0.05f; drops.startA = 1.0f;
+        drops.endR = 0.35f; drops.endG = 0.0f;  drops.endB = 0.0f;  drops.endA = 0.0f;
+
+        drops.sortLayer = 102;
+
+        return { drops };
+    }
+
     bool Effects::init(ResourceCache& resources, Mesh* quadMesh, const TileMap& map, const TileMapLayer* solidLayer) {
         m_ps = std::make_unique<ParticleSystem>();
         if (!m_ps->initialize(resources, quadMesh)) {
@@ -234,17 +470,20 @@ namespace MegaX {
         m_ps->registerEffect("walk_dust", makeWalkDust());
         m_ps->registerEffect("land_dust", makeLandDust());
         m_ps->registerEffect("muzzle_flash", makeMuzzleFlash());
-        // NOTE: casings are NOT registered with the particle system anymore --
-        // they need tile collisions (bouncing), so they are simulated game-side
-        // in updateCasings() and drawn in renderCasings().
+
+        // NOTE: casings are NOT registered. 
         m_ps->registerEffect("bullet_impact", makeBulletImpact());
         if (!TileMapLoader::sampleTileTopColors(map, m_tileTop, 3)) {
             HBE::Core::LogInfo("MegaX Effects: tile top colours unavailable "
                 "(tile-tinted effects will use the fallback tan).");
         }
 
-        // Casing render item: solid white 1x1 texture tinted per-draw with
-        // the individual casing's colour. Sort in front of bullets.
+        m_ps->registerEffect("enemy_muzzle_flash", makeEnemyMuzzleFlash());
+        m_ps->registerEffect("enemy_bullet_impact", makeEnemyBulletImpact());
+        m_ps->registerEffect("enemy_explosion", makeEnemyExplosion());
+        m_ps->registerEffect("hit_spark", makeHitSpark());
+        m_ps->registerEffect("blood_splatter", makeBloodSplatter());
+
         m_map = &map;
         m_solid = solidLayer;
         m_quad = quadMesh;
@@ -369,6 +608,83 @@ namespace MegaX {
         m_ps->spawn("bullet_impact", x, y);
     }
 
+    void Effects::spawnEnemyMuzzleFlash(float x, float y, int dir) {
+        if (!m_ps) return;
+        EffectDef def = makeEnemyMuzzleFlash();
+        if (def.size() >= 2) {
+            EmitterConfig& sparks = def[1];
+            if (dir < 0) {
+                const float lo = 180.0f - sparks.dirMax;
+                const float hi = 180.0f - sparks.dirMin;
+                sparks.dirMin = lo;
+                sparks.dirMax = hi;
+            }
+        }
+        m_ps->registerEffect("enemy_muzzle_flash", def);
+        m_ps->spawn("enemy_muzzle_flash", x, y);
+    }
+
+    void Effects::spawnEnemyBulletImpact(float x, float y, int tileId) {
+        if (!m_ps) return;
+        float r, g, b;
+        colorForTile(tileId, r, g, b);
+
+        EffectDef def = makeEnemyBulletImpact();
+        EmitterConfig& chunks = def[0];
+        chunks.startR = r; chunks.startG = g; chunks.startB = b;
+        chunks.endR = r * 0.55f; chunks.endG = g * 0.55f; chunks.endB = b * 0.55f;
+
+        m_ps->registerEffect("enemy_bullet_impact", def);
+        m_ps->spawn("enemy_bullet_impact", x, y);
+    }
+
+    void Effects::spawnEnemyExplosion(float x, float y) {
+        if (!m_ps) return;
+        m_ps->spawn("enemy_explosion", x, y);
+    }
+
+    void Effects::spawnHitSpark(float x, float y, int dir) {
+        if (!m_ps) return;
+        EffectDef def = makeHitSpark();
+        EmitterConfig& sparks = def[0];
+        if (dir < 0) {
+            const float lo = 180.0f - sparks.dirMax;
+            const float hi = 180.0f - sparks.dirMin;
+            sparks.dirMin = lo;
+            sparks.dirMax = hi;
+        }
+        m_ps->registerEffect("hit_spark", def);
+        m_ps->spawn("hit_spark", x, y);
+    }
+
+    void Effects::spawnBloodSplatter(float x, float y, int dir) {
+        if (!m_ps) return;
+        EffectDef def = makeBloodSplatter();
+        EmitterConfig& drops = def[0];
+        if (dir < 0) {
+            const float lo = 180.0f - drops.dirMax;
+            const float hi = 180.0f - drops.dirMin;
+            drops.dirMin = lo;
+            drops.dirMax = hi;
+        }
+        m_ps->registerEffect("blook_splatter", def);
+        m_ps->spawn("blood_splatter", x, y);
+    }
+
+    void Effects::spawnWalkDustBurst(float feetX, float feetY, int tileId) {
+        if (!m_ps) return;
+        float r, g, b;
+        colorForTile(tileId, r, g, b);
+
+        EffectDef def = makeWalkDust();
+        EmitterConfig& c = def[0];
+        c.startR = r;         c.startG = g;         c.startB = b;
+        c.endR = r * 0.55f; c.endG = g * 0.55f; c.endB = b * 0.55f;
+
+        m_ps->registerEffect("walk_dust", def);
+        m_ps->spawn("walk_dust", feetX, feetY);
+    }
+
     void Effects::tickWalkDust(float dt,
         float feetX, float feetY,
         int tileId,
@@ -383,17 +699,9 @@ namespace MegaX {
         if (m_walkAccum < walkDustPeriod) return;
         m_walkAccum -= walkDustPeriod;
 
-        float r, g, b;
-        colorForTile(tileId, r, g, b);
-
-        EffectDef def = makeWalkDust();
-        EmitterConfig& c = def[0];
-        c.startR = r;         c.startG = g;         c.startB = b;
-        c.endR = r * 0.55f; c.endG = g * 0.55f; c.endB = b * 0.55f;
-
-        m_ps->registerEffect("walk_dust", def);
-        m_ps->spawn("walk_dust", feetX, feetY);
+        spawnWalkDustBurst(feetX, feetY, tileId);
     }
+
 
     void Effects::update(float dt) {
         if (!m_initialized) return;

@@ -17,6 +17,12 @@ namespace MegaX {
 
     class EnemyBulletManager {
     public:
+        struct Impact {
+            float x = 0.0f;
+            float y = 0.0f;
+            int   tileId = 0;
+        };
+
         struct Bullet {
             float x = 0.0f, y = 0.0f;
             float vx = 0.0f, vy = 0.0f;
@@ -32,7 +38,14 @@ namespace MegaX {
 
         void update(float dt, const HBE::Renderer::TileMap* map, const HBE::Renderer::TileMapLayer* solidLayer, const HBE::Renderer::Camera2D& cam);
         void render(HBE::Renderer::Renderer2D& r2d);
-        void clear() { m_bullets.clear(); }
+        void clear() { m_bullets.clear(); m_impacts.clear(); }
+
+        bool consumeImpacts(std::vector<Impact>& out) {
+            if (m_impacts.empty()) return false;
+            out.insert(out.end(), m_impacts.begin(), m_impacts.end());
+            m_impacts.clear();
+            return true;
+        }
         
         int count() const { return static_cast<int>(m_bullets.size()); }
 
@@ -47,6 +60,7 @@ namespace MegaX {
         bool pointInSolid(const HBE::Renderer::TileMap* map, const HBE::Renderer::TileMapLayer* layer, float x, float y) const; 
 
         std::vector<Bullet> m_bullets;
+        std::vector<Impact> m_impacts;
 
         HBE::Renderer::Material m_material{};
         HBE::Renderer::RenderItem m_item{};

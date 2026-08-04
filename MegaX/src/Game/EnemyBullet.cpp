@@ -75,6 +75,17 @@ namespace MegaX {
 			b.y += b.vy * dt;
 
 			if (pointInSolid(map, layer, b.x, b.y)) {
+				int tileId = 0;
+				if (map && layer) {
+					const float tw = map->worldTileW();
+					const float th = map->worldTileH();
+					if (tw > 0.0f && th > 0.0f) {
+						const int tx = static_cast<int>(std::floor(b.x / tw));
+						const int ty = static_cast<int>(std::floor(b.y / th));
+						tileId = layer->at(tx, ty);
+					}
+				}
+				m_impacts.push_back(Impact{ b.x, b.y, tileId });
 				b.alive = false;
 				continue;
 			}

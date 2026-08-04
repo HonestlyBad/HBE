@@ -63,6 +63,9 @@ namespace MegaX {
         void setCollision(const HBE::Renderer::TileMap* map,
             const HBE::Renderer::TileMapLayer* solidLayer);
 
+        void setEffects(class Effects* fx) { m_effects = fx; }
+        Effects* effects() const { return m_effects; }
+
         void update(float dt);
         void render(HBE::Renderer::Renderer2D& r2d);
         void debugDrawBoxes(HBE::Renderer::DebugDraw2D& dbg,
@@ -79,6 +82,7 @@ namespace MegaX {
         class EnemyBulletManager& enemyBullets();
         const class EnemyBulletManager& enemyBullets() const;
 
+        float walkDustPeriod = 0.18f;
         int aliveCount() const;
         const std::vector<Enemy>& enemies() const { return m_enemies; }
         std::vector<Enemy>& enemies() { return m_enemies; }
@@ -94,6 +98,8 @@ namespace MegaX {
         const Player* m_player = nullptr;
         const HBE::Renderer::TileMap* m_map = nullptr;
         const HBE::Renderer::TileMapLayer* m_solid = nullptr;
+
+        Effects* m_effects = nullptr;
 
         Difficulty m_difficulty = Difficulty::Difficult;
         DifficultyProfile m_profile{};

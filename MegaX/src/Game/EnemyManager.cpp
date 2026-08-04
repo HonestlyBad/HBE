@@ -106,7 +106,12 @@ namespace MegaX {
         e.applyDifficulty(m_profile);
         e.setFireCallback(
             [](void* ctx, float sx, float sy, float aimX, float aimY, float speed, int damage) {
-                static_cast<EnemyManager*>(ctx)->m_enemyBullets->spawn(sx, sy, aimX, aimY, speed, damage);
+                auto* mgr = static_cast<EnemyManager*>(ctx);
+                const int dir = (aimX >= sx) ? +1 : -1;
+                if (mgr->m_effects) {
+                    mgr->m_effects->spawnEnemyMuzzleFlash(sx, sy, dir);
+                }
+                mgr->m_enemyBullets->spawn(sx, sy, aimX, aimY, speed, damage);
             },
             this);
         return &e;
@@ -140,7 +145,10 @@ namespace MegaX {
                 if (e.takeDamage(damagePerBullet)) {
                     b.alive = false;
                     ++hits;
-                    if (effects) effects->spawnBulletImpact(b.x, b.y, 0);
+                    if (effects) {
+                        const int dir = (b.vx >= 0.0f) ? +1 : -1;
+                        effects->spawnHitSpark(b.x, b.y, dir);
+                    }
                     break;
                 }
             }
@@ -152,6 +160,18 @@ namespace MegaX {
         if (!m_player) return;
 
         for (auto& e : m_enemies) e.tick(dt, *m_player);
+
+        for (auto& e : m_enemies) {
+            if (e.isFinished()) continue;
+            if (e.justDied() && m_effects) {
+                m_effects->spawnEnemyExplosion(e.x(), e.feetY() + e.boxHalfH);
+                e.consumeJustDied();
+            }
+            if (!e.isAlive()) continue;
+            if (e.landedThisFrame() && m_effects) {
+                m_effects->spawnLandingDust(e.x(), e.feetY(), e.groundTileId());
+            }
+        }
         m_enemies.erase(
             std::remove_if(m_enemies.begin(), m_enemies.end(),
                 [](const Enemy& e) { return e.isFinished(); }),
