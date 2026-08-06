@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HBE/Core/LayerStack.h"
+#include "HBE/Core/Profiler.h"
 #include "HBE/Core/AssetPaths.h"
 
 #include "HBE/Platform/SDLPlatform.h"

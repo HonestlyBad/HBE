@@ -106,18 +106,56 @@ The sandbox project demonstrates how to build a game using the engine.
 
 ### Requirements
 
--   Windows
--   Visual Studio 2022+
+-   **Windows**: Visual Studio 2022+ *or* CMake 3.24+
+-   **Linux (CachyOS / Arch, Fedora, Ubuntu, ...)**: CMake 3.24+, a C++20
+    compiler (clang 15+ or gcc 12+), Ninja, system SDL3 packages
 -   OpenGL 3.3+ capable GPU
 
-### Steps
+### Windows — Visual Studio 2022 (unchanged)
 
-1.  Open the solution in Visual Studio
+1.  Open `HonestlyBadEngine.slnx` in Visual Studio
 2.  Set **HBE.Sandbox** as startup project
 3.  Build (x64 Debug or Release)
 4.  Run
 
 The sandbox scene should load automatically.
+
+### Windows — CMake
+
+Visual Studio 2022 opens `CMakeLists.txt` directly (File → Open → CMake…),
+or from the command line:
+
+```pwsh
+cmake --preset windows-msvc
+cmake --build --preset windows-msvc-debug
+```
+
+Output binaries + copied SDL DLLs + assets end up in
+`build/windows-msvc/bin/<Config>/`.
+
+### Linux (CachyOS / Arch) — CLion or command line
+
+Install prerequisites once:
+
+```bash
+sudo pacman -S base-devel cmake ninja clang glm sdl3 sdl3_ttf
+# SDL3_mixer currently only lives in the AUR:
+yay -S sdl3_mixer     # or: paru -S sdl3_mixer
+```
+
+Then either open the repo folder in **CLion** (it auto-detects
+`CMakeLists.txt` + `CMakePresets.json`) or build from the terminal:
+
+```bash
+cmake --preset linux-clang
+cmake --build --preset linux-clang-debug
+./build/linux-clang/bin/Debug/HBE.Sandbox
+```
+
+To pick a specific app: `cmake --build --preset linux-clang-debug --target MegaX`.
+
+The full target list is `HBE.Sandbox`, `MegaX`, `HBMapMaker` (plus the
+static libs `HBE.Core`, `HBE.Platform.SDL`, `HBE.Renderer.GL`).
 
 ### Development launch
 

@@ -8,6 +8,15 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_scancode.h>
+#include <cstdio>
+
+#ifndef HBE_PROFILER_LOG_ONCE_PER_SECOND
+	#ifdef _DEBUG
+		#define HBE_PROFILER_LOG_ONCE_PER_SECOND 1
+	#else
+		#define HBE_PROFILER_LOG_ONCE_PER_SECOND 0
+	#endif
+#endif
 
 namespace HBE::Core {
 
@@ -318,6 +327,8 @@ namespace HBE::Core {
 		double prevTime = GetTimeSeconds();
 
 		while (m_running) {
+			HBE::Core::Profiler::BeginFrame();
+
 			HBE::Platform::Input::NewFrame();
 
 			// mapping layer needs per-frame update too (edge detection for axis-threshold)
@@ -330,6 +341,7 @@ namespace HBE::Core {
 
 			if (quit) {
 				m_running = false;
+				HBE::Core::Profiler::EndFrame();
 				break;
 			}
 
@@ -341,12 +353,19 @@ namespace HBE::Core {
 			prevTime = now;
 
 			// update
-			for (std::size_t i = 0; i < m_layers.m_layers.size(); ++i) {
-				auto& layer = m_layers.m_layers[i];
-				if (layer) layer->onUpdate(dt);
+			{
+				HBE_PROFILE_SCOPE("ApplicationUpdate");
+				for (std::size_t i = 0; i < m_layers.m_layers.size(); ++i) {
+					auto& layer = m_layers.m_layers[i];
+					if (layer) layer->onUpdate(dt);
+				}
 			}
+
 			// keep audio spatialization / finished-track cleanup fresh
-			m_audio.update(dt);
+			{
+				HBE_PROFILE_SCOPE("Audio");
+				m_audio.update(dt);
+			}
 
 			// 1) Clear the whole window (black bars)
 			m_gl.beginFrameFullWindow(m_winW, m_winH);
@@ -360,6 +379,37 @@ namespace HBE::Core {
 			}
 
 			m_gl.endFrame(m_platform);
+
+			HBE::Core::Profiler::EndFrame();
+
+			#if defined(HBE_PROFILER_LOG_ONCE_PER_SECOND) && HBE_PROFILER_LOG_ONCE_PER_SECOND
+			{
+				static double s_lastLog = 0.0;
+				const double nowS = GetTimeSeconds();
+				if (nowS - s_lastLog >= 1.0) {
+					s_lastLog = nowS;
+					const auto& snap = HBE::Core::Profiler::GetSnapshot();
+					char buf[256];
+					std::snprintf(buf, sizeof(buf),
+						"[Profiler] Frame=%.2fms (avg %.2f min %.2f max %.2f)",
+						snap.frameMs, snap.frameAvgMs, snap.frameMinMs, snap.frameMaxMs);
+					LogInfo(buf);
+					for (const auto& s : snap.sections) {
+						char line[256];
+						const char* pad = "                    "; // 20 spaces
+						int spaces = s.depth * 2;
+						if (spaces > 20) spaces = 20;
+						std::snprintf(line, sizeof(line),
+							"  %.*s%-18s cur=%6.2f avg=%6.2f min=%6.2f max=%6.2f (n=%zu)",
+							spaces, pad,
+							s.name ? s.name : "?",
+							s.currentMs, s.avgMs, s.minMs, s.maxMs,
+							s.sampleCount);
+						LogInfo(line);
+					}
+				}
+			}
+#			endif
 
 			m_platform.delayMillis(1);
 		}

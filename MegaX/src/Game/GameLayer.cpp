@@ -4,6 +4,7 @@
 #include "HBE/Core/Application.h"
 #include "HBE/Core/AssetPaths.h"
 #include "HBE/Core/Log.h"
+#include "HBE/Core/Profiler.h"
 
 #include "HBE/Renderer/Renderer2D.h"
 #include "HBE/Renderer/ResourceCache.h"
@@ -13,6 +14,7 @@
 
 #include <vector>
 #include <chrono>
+#include <cmath>
 
 using namespace HBE::Core;
 using namespace HBE::Renderer;
@@ -89,6 +91,7 @@ namespace MegaX {
 	}
 
 	void GameLayer::onUpdate(float dt) {
+        HBE_PROFILE_SCOPE("SceneUpdate");
         m_watcher.poll(dt);
 
 		// horizontal run (both modes)
@@ -162,32 +165,38 @@ namespace MegaX {
             reloadScene(false);
         }
 
-        m_world.update(dt);
-		m_player.setMoveInput(ix, iy);
-		m_player.setJumpInput(jumpPressed, jumpHeld);
-		m_player.setCrouchInput(crouchHeld);
-		m_player.setFireInput(firePressed, fireHeld);
-		m_player.update(dt);
+        {
+            HBE_PROFILE_SCOPE("Physics");
+            m_world.update(dt);
+            m_player.setMoveInput(ix, iy);
+            m_player.setJumpInput(jumpPressed, jumpHeld);
+            m_player.setCrouchInput(crouchHeld);
+            m_player.setFireInput(firePressed, fireHeld);
+            m_player.update(dt);
 
-		float bx, by; int bdir;
-		if (m_player.consumeShot(bx, by, bdir)) {
-			m_bullets.spawn(bx, by, bdir);
+            float bx, by; int bdir;
+            if (m_player.consumeShot(bx, by, bdir)) {
+                m_bullets.spawn(bx, by, bdir);
 
-            m_enemies.notifyGunshot(bx, by);
+                m_enemies.notifyGunshot(bx, by);
 
-            m_effects.spawnMuzzleFlash(bx, by, bdir);
-            const float casingX = m_player.x() + static_cast<float>(bdir) * 5.0f;
-            m_effects.spawnCasing(casingX, by, bdir);
-		}
-		m_bullets.update(dt, &m_world.map(), m_ground, m_camera.camera());
-
-        m_enemies.checkBulletHits(m_bullets, &m_effects, 1);
+                m_effects.spawnMuzzleFlash(bx, by, bdir);
+                const float casingX = m_player.x() + static_cast<float>(bdir) * 5.0f;
+                m_effects.spawnCasing(casingX, by, bdir);
+            }
+            m_bullets.update(dt, &m_world.map(), m_ground, m_camera.camera());
+        }
 
         {
-            std::vector<BulletManager::Impact> impacts;
-            if (m_bullets.consumeImpacts(impacts)) {
-                for (const auto& imp : impacts) {
-                    m_effects.spawnBulletImpact(imp.x, imp.y, imp.tileId);
+            HBE_PROFILE_SCOPE("Comabt");
+            m_enemies.checkBulletHits(m_bullets, &m_effects, 1);
+
+            {
+                std::vector<BulletManager::Impact> impacts;
+                if (m_bullets.consumeImpacts(impacts)) {
+                    for (const auto& imp : impacts) {
+                        m_effects.spawnBulletImpact(imp.x, imp.y, imp.tileId);
+                    }
                 }
             }
         }
@@ -207,50 +216,63 @@ namespace MegaX {
 		m_camera.update(dt);
 		m_app->gl().setCamera(m_camera.camera());
 
-        m_enemies.update(dt);
-
-        auto& ebm = m_enemies.enemyBullets();
-        ebm.update(dt, &m_world.map(), m_ground, m_camera.camera());
-
         {
-            std::vector<EnemyBulletManager::Impact> impacts;
-            if (ebm.consumeImpacts(impacts)) {
-                for (const auto& imp : impacts) {
-                    m_effects.spawnEnemyBulletImpact(imp.x, imp.y, imp.tileId);
+            HBE_PROFILE_SCOPE("AI");
+            m_enemies.update(dt);
+
+            auto& ebm = m_enemies.enemyBullets();
+            ebm.update(dt, &m_world.map(), m_ground, m_camera.camera());
+
+            {
+                std::vector<EnemyBulletManager::Impact> impacts;
+                if (ebm.consumeImpacts(impacts)) {
+                    for (const auto& imp : impacts) {
+                        m_effects.spawnEnemyBulletImpact(imp.x, imp.y, imp.tileId);
+                    }
+                }
+            }
+
+            {
+                const AABB pb = m_player.hurtbox();
+                for (auto& b : ebm.bullets()) {
+                    if (!b.alive) continue;
+                    if (std::fabs(b.x - pb.cx) > pb.w * 0.5f) continue;
+                    if (std::fabs(b.y - pb.cy) > pb.h * 0.5f) continue;
+
+                    const int kbDir = (b.vx >= 0.0f) ? +1 : -1;
+                    if (m_player.takeDamage(b.damage, kbDir)) {
+                        m_effects.spawnBloodSplatter(b.x, b.y, kbDir);
+                        b.alive = false;
+                    }
                 }
             }
         }
 
         {
-            const AABB pb = m_player.hurtbox();
-            for (auto& b : ebm.bullets()) {
-                if (!b.alive) continue;
-                if (std::fabs(b.x - pb.cx) > pb.w * 0.5f) continue;
-                if (std::fabs(b.y - pb.cy) > pb.h * 0.5f) continue;
-
-                const int kbDir = (b.vx >= 0.0f) ? +1 : -1;
-                if (m_player.takeDamage(b.damage, kbDir)) {
-                    m_effects.spawnBloodSplatter(b.x, b.y, kbDir);
-                    b.alive = false;
-                }
-            }
+            HBE_PROFILE_SCOPE("Particles");
+            m_effects.update(dt);
         }
-
-        m_effects.update(dt);
 	}
 
 	void GameLayer::onRender() {
 		Renderer2D& r2d = m_app->renderer2D();
 
 		r2d.beginScene(m_camera.camera(), RenderPass::World);
-        m_world.render(r2d);
-        m_enemies.render(r2d);
-        m_enemies.renderBubbles(m_debug, r2d);
-		m_player.render(r2d);
-		m_bullets.render(r2d);
-        m_enemies.enemyBullets().render(r2d);
 
-        m_effects.render(r2d);
+        {
+            HBE_PROFILE_SCOPE("TileRendering");
+            m_world.render(r2d);
+        }
+
+        {
+            HBE_PROFILE_SCOPE("SpriteRendering");
+            m_enemies.render(r2d);
+            m_enemies.renderBubbles(m_debug, r2d);
+            m_player.render(r2d);
+            m_bullets.render(r2d);
+            m_enemies.enemyBullets().render(r2d);
+            m_effects.render(r2d);
+        }
 
         if (m_showHitBoxes) {
             m_enemies.debugDrawBoxes(m_debug, r2d);
