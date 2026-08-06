@@ -35,7 +35,49 @@ yay -S sdl3_mixer
 
 > If AUR fails or you don't want it, HBE will still build — the CMake config emits a warning and links against a stub. Audio-dependent code paths will link but be no-ops until SDL3_mixer is available.
 
-### 1.4 (Recommended) JetBrains Toolbox → CLion
+### 1.4 Vendored header-only / generated dependencies
+
+A few third-party sources are referenced by the CMake build but are **not**
+checked into git and are **not** installable via `pacman` in the layout HBE
+expects. You must vendor them once per clone before `cmake --preset
+linux-clang` will fully configure and build:
+
+```bash
+# glad (classic 0.1.x, OpenGL 3.3 core loader) — HBE.Renderer.GL/external/glad
+python3 -m venv /tmp/gladenv && /tmp/gladenv/bin/pip install glad
+/tmp/gladenv/bin/glad --profile core --api gl=3.3 --generator c \
+    --out-path HBE.Renderer.GL/external/glad --reproducible
+rm -rf /tmp/gladenv
+
+# nlohmann/json single header — external/nlohmann/json.hpp
+mkdir -p external/nlohmann
+curl -fsSL -o external/nlohmann/json.hpp \
+    https://raw.githubusercontent.com/nlohmann/json/v3.11.3/single_include/nlohmann/json.hpp
+
+# stb single-header libs — external/stb/{stb_image.h,stb_truetype.h}
+mkdir -p external/stb
+curl -fsSL -o external/stb/stb_image.h \
+    https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+curl -fsSL -o external/stb/stb_truetype.h \
+    https://raw.githubusercontent.com/nothings/stb/master/stb_truetype.h
+```
+
+This produces:
+
+```
+HBE.Renderer.GL/external/glad/src/glad.c
+HBE.Renderer.GL/external/glad/include/glad/glad.h
+HBE.Renderer.GL/external/glad/include/KHR/khrplatform.h
+external/nlohmann/json.hpp
+external/stb/stb_image.h
+external/stb/stb_truetype.h
+```
+
+> `glm` does **not** need vendoring — the system package (`sdl3`/`glm` from
+> step 1.2) provides `/usr/include/glm`, which CMake's `find_package`/include
+> paths pick up directly.
+
+### 1.5 (Recommended) JetBrains Toolbox → CLion
 
 ```bash
 yay -S jetbrains-toolbox
@@ -214,6 +256,7 @@ Inside Copilot CLI: `/terminal-setup` — one-time setup so `Shift+Enter` insert
 
 | Symptom | Fix |
 |---|---|
+| `Cannot find source file: .../glad/src/glad.c` or `fatal error: 'json.hpp'/'stb_image.h'/'stb_truetype.h' file not found` | Vendored deps missing — run the commands in step 1.4 to generate/download `glad`, `nlohmann/json.hpp`, and `stb_image.h`/`stb_truetype.h`. |
 | `Could not find SDL3` | `sudo pacman -S sdl3`. If already installed, ensure `pkgconf` is installed too. |
 | `SDL3_mixer not found via find_package` (warning) | Install via AUR: `yay -S sdl3_mixer`. HBE will still build without it. |
 | Runtime: `libSDL3.so.0: cannot open shared object` | Re-run `sudo pacman -S sdl3` — the pacman-provided `.so` goes in `/usr/lib/`, no `LD_LIBRARY_PATH` needed. |

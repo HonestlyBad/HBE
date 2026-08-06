@@ -18,6 +18,25 @@
 
 include_guard(GLOBAL)
 
+# -----------------------------------------------------------------------------
+# hbe_alias_target(<alias> <target>)
+#
+# Like add_library(<alias> ALIAS <target>), but safe to use when <target> may
+# itself already be an ALIAS target (CMake forbids aliasing an alias). Some
+# distro-provided SDL3 CMake configs (e.g. Arch/CachyOS) export SDL3::SDL3 as
+# an ALIAS rather than a real target, which breaks a direct ALIAS-of-ALIAS.
+# This resolves the alias chain down to the real target before aliasing.
+# -----------------------------------------------------------------------------
+function(hbe_alias_target alias_name target_name)
+    set(_resolved ${target_name})
+    get_target_property(_aliased ${_resolved} ALIASED_TARGET)
+    while(_aliased)
+        set(_resolved ${_aliased})
+        get_target_property(_aliased ${_resolved} ALIASED_TARGET)
+    endwhile()
+    add_library(${alias_name} ALIAS ${_resolved})
+endfunction()
+
 set(HBE_EXTERNAL_DIR ${CMAKE_SOURCE_DIR}/external)
 
 # -----------------------------------------------------------------------------
@@ -91,11 +110,11 @@ endif()
 # -----------------------------------------------------------------------------
 if(HBE_USE_SYSTEM_SDL3)
     find_package(SDL3 CONFIG REQUIRED)
-    add_library(hbe::sdl3 ALIAS SDL3::SDL3)
+    hbe_alias_target(hbe::sdl3 SDL3::SDL3)
 
     find_package(SDL3_mixer CONFIG QUIET)
     if(TARGET SDL3_mixer::SDL3_mixer)
-        add_library(hbe::sdl3_mixer ALIAS SDL3_mixer::SDL3_mixer)
+        hbe_alias_target(hbe::sdl3_mixer SDL3_mixer::SDL3_mixer)
     else()
         message(WARNING
             "SDL3_mixer not found via find_package. "
@@ -108,7 +127,7 @@ if(HBE_USE_SYSTEM_SDL3)
 
     find_package(SDL3_ttf CONFIG QUIET)
     if(TARGET SDL3_ttf::SDL3_ttf)
-        add_library(hbe::sdl3_ttf ALIAS SDL3_ttf::SDL3_ttf)
+        hbe_alias_target(hbe::sdl3_ttf SDL3_ttf::SDL3_ttf)
     endif()
 else()
     # Bundled Windows binaries — mirrors what the .vcxproj files reference.

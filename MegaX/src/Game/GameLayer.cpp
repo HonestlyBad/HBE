@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <chrono>
+#include <cmath>
 
 using namespace HBE::Core;
 using namespace HBE::Renderer;

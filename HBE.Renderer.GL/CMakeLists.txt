@@ -45,6 +45,7 @@ target_link_libraries(HBE.Renderer.GL
         hbe::glm
         hbe::opengl
     PRIVATE
+        HBE.Core
         hbe::nlohmann_json
         hbe::stb
         hbe::sdl3
