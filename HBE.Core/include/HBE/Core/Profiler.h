@@ -1,0 +1,81 @@
+#pragma once
+
+#include <cstdint>
+#include <cstddef>
+#include <vector>
+
+#ifndef HBE_PROFILE_ENABLED
+	#if defined(_DEBUG) && !defined(NDEBUG)
+		#define HBE_PROFILE_ENABLED 1
+	#else
+		#define HBE_PROFILE_ENABLED 0
+	#endif
+#endif
+
+namespace HBE::Core::Profiler {
+	static constexpr std::size_t kRollingWindowFrames = 120;
+	static constexpr std::size_t kMaxSections = 64;
+	static constexpr std::size_t kMaxScopesPerFrame = 512;
+
+	struct Sample {
+		const char* name = nullptr;
+		int depth = 0;
+		double currentMs = 0.0f;
+		double avgMs = 0.0;
+		double minMs = 0.0;
+		double maxMs = 0.0;
+		std::size_t sampleCount = 0;
+		std::size_t opensThisFrame = 0;
+	};
+
+	struct Snapshot {
+		double frameMs = 0.0;
+		double frameAvgMs = 0.0;
+		double frameMinMs = 0.0;
+		double frameMaxMs = 0.0;
+		std::size_t frameSampleCount = 0;
+		std::uint64_t frameIndex = 0;
+		std::vector<Sample> sections;
+	};
+
+	void BeginFrame();
+	void EndFrame();
+
+	void SetEnabled(bool on);
+	bool IsEnabled();
+	
+	void Reset();
+
+	const Snapshot& GetSnapshot();
+
+	std::uint64_t NowNs();
+
+	int BeginScope(const char* name);
+	void EndScope(int index);
+
+	class ScopeTimer {
+	public:
+		explicit ScopeTimer(const char* name) noexcept : m_index(BeginScope(name)) {}
+		~ScopeTimer() noexcept { EndScope(m_index); }
+
+		ScopeTimer(const ScopeTimer&) = delete;
+		ScopeTimer& operator=(const ScopeTimer&) = delete;
+		ScopeTimer(ScopeTimer&&) = delete;
+		ScopeTimer& operator=(ScopeTimer&&) = delete;
+	private:
+		int m_index;
+	};
+}
+
+#define HBE_PROFILE_CONCAT_INNER(a, b) a##b
+#define HBE_PROFILE_CONCAT(a, b) HBE_PROFILE_CONCAT_INNER(a, b)
+
+#if HBE_PROFILE_ENABLED
+	#define HBE_PROFILE_SCOPE(NAME) ::HBE::Core::Profiler::ScopeTimer HBE_PROFILE_CONCAT(_hbe_prof_, __LINE__)(NAME)
+	#define HBE_PROFILE_BEGIN_FRAME() ::HBE::Core::Profiler::BeginFrame()
+	#define HBE_PROFILE_END_FRAME() ::HBE::Core::Profiler::EndFrame()
+#else
+	#define HBE_PROFILE_SCOPE(NAME) ((void)0)
+	#define HBE_PROFILE_BEGIN_FRAME() ((void)0)
+	#define HBE_PROFILE_END_FRAME() ((void)0)
+#endif
