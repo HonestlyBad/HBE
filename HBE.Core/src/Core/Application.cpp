@@ -10,11 +10,13 @@
 #include <SDL3/SDL_scancode.h>
 #include <cstdio>
 
+// See Profiler.h — NDEBUG, not _DEBUG, is the portable gate. Define
+// HBE_PROFILER_LOG_ONCE_PER_SECOND=0 to silence the 1-Hz block in a Debug build.
 #ifndef HBE_PROFILER_LOG_ONCE_PER_SECOND
-	#ifdef _DEBUG
-		#define HBE_PROFILER_LOG_ONCE_PER_SECOND 1
-	#else
+	#if defined(NDEBUG)
 		#define HBE_PROFILER_LOG_ONCE_PER_SECOND 0
+	#else
+		#define HBE_PROFILER_LOG_ONCE_PER_SECOND 1
 	#endif
 #endif
 

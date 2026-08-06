@@ -4,11 +4,15 @@
 #include <cstddef>
 #include <vector>
 
+// NDEBUG is the portable debug/release signal: CMake adds it to Release,
+// RelWithDebInfo and MinSizeRel on every compiler, and never to Debug. MSVC's
+// _DEBUG is not available on GCC/Clang, so gating on it compiled the whole
+// profiler out of Linux Debug builds.
 #ifndef HBE_PROFILE_ENABLED
-	#if defined(_DEBUG) && !defined(NDEBUG)
-		#define HBE_PROFILE_ENABLED 1
-	#else
+	#if defined(NDEBUG)
 		#define HBE_PROFILE_ENABLED 0
+	#else
+		#define HBE_PROFILE_ENABLED 1
 	#endif
 #endif
 
