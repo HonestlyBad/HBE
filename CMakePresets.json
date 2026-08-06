@@ -1,0 +1,76 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+
+        {
+            "name": "linux-clang",
+            "displayName": "Linux (Ninja Multi-Config, clang, system SDL3)",
+            "description": "CachyOS / Arch: uses pacman-provided sdl3, sdl3_ttf. sdl3_mixer via AUR.",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "HBE_USE_SYSTEM_SDL3": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+
+        {
+            "name": "linux-gcc",
+            "displayName": "Linux (Ninja Multi-Config, gcc, system SDL3)",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "HBE_USE_SYSTEM_SDL3": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+
+        {
+            "name": "windows-msvc",
+            "displayName": "Windows (Visual Studio 2022, bundled SDL3)",
+            "description": "Uses external/SDL3 pre-built binaries — matches the .slnx workflow.",
+            "generator": "Visual Studio 17 2022",
+            "architecture": { "value": "x64", "strategy": "set" },
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "HBE_USE_SYSTEM_SDL3": "OFF",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        }
+    ],
+
+    "buildPresets": [
+        { "name": "linux-clang-debug",   "configurePreset": "linux-clang",  "configuration": "Debug"   },
+        { "name": "linux-clang-release", "configurePreset": "linux-clang",  "configuration": "Release" },
+        { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc",    "configuration": "Debug"   },
+        { "name": "linux-gcc-release",   "configurePreset": "linux-gcc",    "configuration": "Release" },
+        { "name": "windows-msvc-debug",  "configurePreset": "windows-msvc", "configuration": "Debug"   },
+        { "name": "windows-msvc-release","configurePreset": "windows-msvc", "configuration": "Release" }
+    ]
+}

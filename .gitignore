@@ -44,3 +44,15 @@ x64/**/bindings.cfg
 /HBE.Renderer.GL/HBE.Renderer.GL/x64
 /HBMapMaker/obj
 /HBE.Renderer.GL/HBE.Renderer.GL/x64
+
+# CMake build trees + IDE caches
+/build
+/out
+/cmake-build-*
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+.idea/
+.vscode/
