@@ -40,6 +40,8 @@ namespace HBE::Renderer {
 		
 		bool isInitialized() const { return m_initialized; }
 
+		int lastPassCount() const { return m_lastPassCount; }
+
 		const Framebuffer& sceneFBO() const { return m_scene; }
 
 	private:
@@ -56,6 +58,8 @@ namespace HBE::Renderer {
 
 		void initQuad();
 		void destroyQuad();
+
+		int m_lastPassCount = 0;
 
 		void runEffect(const PostProcessEffect& fx, const Framebuffer& src, const Framebuffer& dst);
 		void blitToScreen(const Framebuffer& src, int vpX, int vpY, int vpW, int vpH);

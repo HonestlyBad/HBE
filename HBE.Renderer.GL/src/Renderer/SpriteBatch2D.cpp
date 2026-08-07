@@ -20,6 +20,8 @@ namespace HBE::Renderer {
 		m_drawCalls = 0;
 		m_quadsSubmitted = 0;
 		m_stateChanges = 0;
+		m_materialChanges = 0;
+		m_textureChanges = 0;
 		m_orderCounter = 0;
 		m_quads.clear();
 		resetStateCache();
@@ -309,6 +311,7 @@ namespace HBE::Renderer {
 			mat->shader->use();
 			m_lastShader = mat->shader;
 			changed = true;
+			++m_materialChanges;
 		}
 
 		mat->shader->setMat4("uMVP", viewProj);
@@ -335,6 +338,7 @@ namespace HBE::Renderer {
 			}
 			m_lastBlend = mat->blend;
 			changed = true;
+			++m_materialChanges;
 		}
 
 		if (mat->texture != m_lastTexture) {
@@ -346,6 +350,7 @@ namespace HBE::Renderer {
 			}
 			m_lastTexture = mat->texture;
 			changed = true;
+			++m_materialChanges;
 		}
 
 		if (!m_lastMaterial || !m_lastMaterial->uniformsEqual(*mat)) {
@@ -358,6 +363,7 @@ namespace HBE::Renderer {
 			int sdfSoftLoc = mat->shader->getUniformLocation("uSDFSoftness");
 			if (sdfSoftLoc >= 0) glUniform1f(sdfSoftLoc, mat->sdfSoftness);
 			changed = true;
+			++m_materialChanges;
 		}
 
 		m_lastMaterial = mat;

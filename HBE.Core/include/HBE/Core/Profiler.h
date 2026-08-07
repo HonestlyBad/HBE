@@ -32,6 +32,33 @@ namespace HBE::Core::Profiler {
 		std::size_t opensThisFrame = 0;
 	};
 
+	struct RendererStats
+	{
+		int drawCalls = 0;
+		int passes = 0;
+		int submittedQuads = 0;
+		int renderedQuads = 0;
+		int culledSprites = 0;
+		int materialChanges = 0;
+		int textureChanges = 0;
+		int visibleTileChunks = 0;
+		int postProcessPasses = 0;
+		int activeLights = 0;
+		int shadowCastingLights = 0;
+		int liveParticles = 0;
+	};
+
+	struct GpuTimings
+	{
+		bool supported = false;
+		double frameMs = 0.0;
+		double frameAvgMs = 0.0;
+		double frameMinMs = 0.0;
+		double frameMaxMs = 0.0;
+		std::size_t frameSampleCount = 0;
+		std::vector<Sample> sections;
+	};
+
 	struct Snapshot {
 		double frameMs = 0.0;
 		double frameAvgMs = 0.0;
@@ -40,6 +67,9 @@ namespace HBE::Core::Profiler {
 		std::size_t frameSampleCount = 0;
 		std::uint64_t frameIndex = 0;
 		std::vector<Sample> sections;
+
+		GpuTimings gpu;
+		RendererStats renderer;
 	};
 
 	void BeginFrame();
@@ -56,6 +86,13 @@ namespace HBE::Core::Profiler {
 
 	int BeginScope(const char* name);
 	void EndScope(int index);
+
+	void SetGpuSupported(bool supported);
+	void PublishGpuSection(const char* name, std::uint64_t ns, int depth);
+	void PublishGpuFrame(std::uint64_t ns);
+	void PublishRendererStats(const RendererStats& stats);
+	void PublishLightStats(int activeLights, int shadowCastingLights);
+	void PublishParticleStats(int liveParticles);
 
 	class ScopeTimer {
 	public:

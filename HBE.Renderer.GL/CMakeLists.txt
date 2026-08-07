@@ -7,6 +7,7 @@ add_library(HBE.Renderer.GL STATIC
     src/Renderer/Framebuffer.cpp
     src/Renderer/GLRenderer.cpp
     src/Renderer/GLShader.cpp
+    src/Renderer/GpuTimer.cpp
     src/Renderer/Material.cpp
     src/Renderer/Mesh.cpp
     src/Renderer/ParticleEmitter.cpp
@@ -29,6 +30,8 @@ add_library(HBE.Renderer.GL STATIC
     src/Renderer/TileMapRenderer.cpp
     src/Renderer/UI/UIContext.cpp
     src/Renderer/UI/UIThemeLoader.cpp
+        include/HBE/Renderer/GpuTimer.h
+        src/Renderer/GpuTimer.cpp
 )
 
 target_include_directories(HBE.Renderer.GL

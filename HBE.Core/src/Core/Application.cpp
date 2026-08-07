@@ -10,6 +10,8 @@
 #include <SDL3/SDL_scancode.h>
 #include <cstdio>
 
+#include "HBE/Renderer/GpuTimer.h"
+
 // See Profiler.h — NDEBUG, not _DEBUG, is the portable gate. Define
 // HBE_PROFILER_LOG_ONCE_PER_SECOND=0 to silence the 1-Hz block in a Debug build.
 #ifndef HBE_PROFILER_LOG_ONCE_PER_SECOND
@@ -28,6 +30,7 @@ namespace HBE::Core {
 
 	Application::~Application() {
 		m_layers.clear();
+		HBE::Renderer::GpuTimer::Shutdown();
 		// SDLPlatform destructur already calls shutdown()
 	}
 
@@ -300,7 +303,6 @@ namespace HBE::Core {
 		m_layers.dispatchEvent(wev);
 	}
 
-
 	void Application::syncWindowSizeAndViewport() {
 		int w = 0, h = 0;
 		SDL_GetWindowSizeInPixels(m_platform.getWindow(), &w, &h);
@@ -330,6 +332,7 @@ namespace HBE::Core {
 
 		while (m_running) {
 			HBE::Core::Profiler::BeginFrame();
+			HBE::Renderer::GpuTimer::NewFrame();
 
 			HBE::Platform::Input::NewFrame();
 
@@ -369,6 +372,8 @@ namespace HBE::Core {
 				m_audio.update(dt);
 			}
 
+			m_renderer2D.resetFrameStats();
+
 			// 1) Clear the whole window (black bars)
 			m_gl.beginFrameFullWindow(m_winW, m_winH);
 
@@ -381,6 +386,20 @@ namespace HBE::Core {
 			}
 
 			m_gl.endFrame(m_platform);
+
+			{
+				const auto rs = m_renderer2D.getStats();
+				HBE::Core::Profiler::RendererStats out{};
+				out.drawCalls = rs.drawCalls;
+				out.passes = rs.passes;
+				out.submittedQuads = rs.submittedQuads;
+				out.renderedQuads = rs.renderedQuads;
+				out.culledSprites = rs.culledSprites;
+				out.materialChanges = rs.materialChanges;
+				out.textureChanges = rs.textureChanges;
+
+				HBE::Core::Profiler::PublishRendererStats(out);
+			}
 
 			HBE::Core::Profiler::EndFrame();
 
@@ -409,6 +428,52 @@ namespace HBE::Core {
 							s.sampleCount);
 						LogInfo(line);
 					}
+					if (snap.gpu.supported)
+					{
+						char gpu[256];
+						std::snprintf(gpu, sizeof(gpu),
+							"[Profiler] GPU=%.2fms (avg %.2f min %.2f max %.2f)",
+							snap.gpu.frameMs, snap.gpu.frameAvgMs,
+							snap.gpu.frameMinMs, snap.gpu.frameMaxMs);
+						LogInfo(gpu);
+						for (const auto& g : snap.gpu.sections)
+						{
+							char line[256];
+							const char* pad = "                    ";
+							int spaces = g.depth * 2;
+							if (spaces > 20) spaces = 20;
+							std::snprintf(line, sizeof(line),
+								"  %.*s%-18s cur=%6.2f avg=%6.2f min=%6.2f max=%6.2f (n=%zu)",
+								spaces, pad,
+								g.name ? g.name : "?",
+								g.currentMs, g.avgMs, g.minMs, g.maxMs,
+								g.sampleCount);
+							LogInfo(line);
+						}
+					}
+					else
+					{
+						LogInfo("[Profiler] GPU=unsupported (no ARB_timer_query)");
+					}
+
+					const auto& r = snap.renderer;
+					char rline1[256];
+					std::snprintf(rline1, sizeof(rline1),
+						"[Profiler] draws=%d passes=%d subQuads=%d rendQuads=%d culled=%d",
+						r.drawCalls, r.passes, r.submittedQuads, r.renderedQuads, r.culledSprites);
+					LogInfo(rline1);
+
+					char rline2[256];
+					std::snprintf(rline2, sizeof(rline2),
+						"[Profiler] matChg=%d texChg=%d tileChunks=%d ppPasses=%d",
+						r.materialChanges, r.textureChanges, r.visibleTileChunks, r.postProcessPasses);
+					LogInfo(rline2);
+
+					char rline3[256];
+					std::snprintf(rline3, sizeof(rline3),
+						"[Profiler] lights=%d shadowLights=%d liveParticles=%d",
+						r.activeLights, r.shadowCastingLights, r.liveParticles);
+					LogInfo(rline3);
 				}
 			}
 #			endif

@@ -56,7 +56,11 @@ namespace HBE::Renderer {
 
 			m_frameDrawCalls += m_batch->drawCalls();
 			m_frameQuads += m_batch->quadCount();
+			m_frameSubmittedQuads += m_batch->quadCount();
+			m_frameRenderedQuads += m_batch->quadCount();
 			m_frameStateChanges += m_batch->stateChanges();
+			m_frameMaterialChanges += m_batch->materialChanges();
+			m_frameTextureChanges += m_batch->textureChanges();
 		}
 
 		++m_framePasses;
@@ -92,6 +96,29 @@ namespace HBE::Renderer {
 		s.quads = m_frameQuads;
 		s.stateChanges = m_frameStateChanges;
 		s.passes = m_framePasses;
+		s.submittedQuads = m_frameSubmittedQuads;
+		s.renderedQuads = m_frameRenderedQuads;
+		s.culledSprites = m_frameCulledSprites;
+		s.materialChanges = m_frameMaterialChanges;
+		s.textureChanges = m_frameTextureChanges;
 		return s;
+	}
+
+	void Renderer2D::resetFrameStats()
+	{
+		m_frameDrawCalls = 0;
+		m_frameQuads = 0;
+		m_frameStateChanges = 0;
+		m_framePasses = 0;
+		m_frameSubmittedQuads = 0;
+		m_frameRenderedQuads = 0;
+		m_frameCulledSprites = 0;
+		m_frameMaterialChanges = 0;
+		m_frameTextureChanges = 0;
+	}
+
+	void Renderer2D::addCulledSprites(int n)
+	{
+		if (n > 0) m_frameCulledSprites += n;
 	}
 }

@@ -23,9 +23,18 @@ namespace HBE::Renderer {
 			int quads = 0;
 			int stateChanges = 0;
 			int passes = 0;
+			int submittedQuads = 0;
+			int renderedQuads = 0;
+			int culledSprites = 0;
+			int materialChanges = 0;
+			int textureChanges = 0;
 		};
 
 		Renderer2DStats getStats() const;
+
+		void resetFrameStats();
+
+		void addCulledSprites(int n);
 
 		// Tell the renderer which mesh is the standard sprite quad ( quad_pos_uv).
 		// only draws using this mesh will be batched
@@ -60,5 +69,10 @@ namespace HBE::Renderer {
 		int m_frameQuads = 0;
 		int m_frameStateChanges = 0;
 		int m_framePasses = 0;
+		int m_frameSubmittedQuads = 0;
+		int m_frameRenderedQuads = 0;
+		int m_frameCulledSprites = 0;
+		int m_frameMaterialChanges = 0;
+		int m_frameTextureChanges = 0;
 	};
 }

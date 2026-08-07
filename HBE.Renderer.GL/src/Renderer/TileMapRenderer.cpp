@@ -157,6 +157,7 @@ namespace HBE::Renderer {
                     r2d.draw(item);
                 }
             }
+            ++m_visibleChunks;
         }
     }
 

@@ -15,6 +15,7 @@
 #include <vector>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 
 using namespace HBE::Core;
 using namespace HBE::Renderer;
@@ -164,6 +165,61 @@ namespace MegaX {
             LogInfo("MegaX: soft respawn requested (F7).");
             reloadScene(false);
         }
+        if (Input::IsKeyPressed(SDL_SCANCODE_F8)) {
+            const auto& snap = HBE::Core::Profiler::GetSnapshot();
+            char line[256];
+
+            LogInfo("========== [Profiler F8 Snapshot] ==========");
+
+            std::snprintf(line, sizeof(line),
+                "CPU frame: %.2f ms (avg %.2f, min %.2f, max %.2f, samples %zu)",
+                snap.frameMs, snap.frameAvgMs, snap.frameMinMs, snap.frameMaxMs,
+                snap.frameSampleCount);
+            LogInfo(line);
+
+            if (snap.gpu.supported) {
+                std::snprintf(line, sizeof(line),
+                    "GPU frame: %.2f ms (avg %.2f, min %.2f, max %.2f, samples %zu)",
+                    snap.gpu.frameMs, snap.gpu.frameAvgMs, snap.gpu.frameMinMs,
+                    snap.gpu.frameMaxMs, snap.gpu.frameSampleCount);
+                LogInfo(line);
+            } else {
+                LogInfo("GPU frame: <unsupported / disabled>");
+            }
+
+            const auto& r = snap.renderer;
+            std::snprintf(line, sizeof(line),
+                "Renderer: drawCalls=%d passes=%d submitQ=%d renderQ=%d culled=%d"
+                " matChg=%d texChg=%d tileChunks=%d ppPasses=%d",
+                r.drawCalls, r.passes, r.submittedQuads, r.renderedQuads, r.culledSprites,
+                r.materialChanges, r.textureChanges, r.visibleTileChunks, r.postProcessPasses);
+            LogInfo(line);
+
+            std::snprintf(line, sizeof(line),
+                "Scene: liveParticles=%d activeLights=%d shadowLights=%d",
+                r.liveParticles, r.activeLights, r.shadowCastingLights);
+            LogInfo(line);
+
+            std::snprintf(line, sizeof(line), "CPU sections (%zu):", snap.sections.size());
+            LogInfo(line);
+            for (const auto& s : snap.sections) {
+                std::snprintf(line, sizeof(line),
+                    "  %-20s cur %7.3f ms  avg %7.3f  min %7.3f  max %7.3f",
+                    s.name ? s.name : "?", s.currentMs, s.avgMs, s.minMs, s.maxMs);
+                LogInfo(line);
+            }
+
+            std::snprintf(line, sizeof(line), "GPU sections (%zu):", snap.gpu.sections.size());
+            LogInfo(line);
+            for (const auto& g : snap.gpu.sections) {
+                std::snprintf(line, sizeof(line),
+                    "  %-20s cur %7.3f ms  avg %7.3f  min %7.3f  max %7.3f",
+                    g.name ? g.name : "?", g.currentMs, g.avgMs, g.minMs, g.maxMs);
+                LogInfo(line);
+            }
+
+            LogInfo("============================================");
+        }
 
         {
             HBE_PROFILE_SCOPE("Physics");
@@ -188,7 +244,7 @@ namespace MegaX {
         }
 
         {
-            HBE_PROFILE_SCOPE("Comabt");
+            HBE_PROFILE_SCOPE("Combat");
             m_enemies.checkBulletHits(m_bullets, &m_effects, 1);
 
             {
@@ -252,6 +308,10 @@ namespace MegaX {
             HBE_PROFILE_SCOPE("Particles");
             m_effects.update(dt);
         }
+
+        // -------- Item 14: publish game-side stats to the profiler --------
+        HBE::Core::Profiler::PublishParticleStats(m_effects.liveParticles());
+        HBE::Core::Profiler::PublishLightStats(0, 0); // MegaX has no lighting yet.
 	}
 
 	void GameLayer::onRender() {

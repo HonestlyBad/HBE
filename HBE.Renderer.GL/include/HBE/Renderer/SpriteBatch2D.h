@@ -30,7 +30,9 @@ namespace HBE::Renderer {
 
         int drawCalls()      const { return m_drawCalls; }
         int quadCount()      const { return m_quadsSubmitted; }
-        int stateChanges()   const { return m_stateChanges; } // NEW
+        int stateChanges()   const { return m_stateChanges; }
+        int materialChanges() const {return m_materialChanges; }
+        int textureChanges() const {return m_textureChanges; }
 
     private:
         struct Quad {
@@ -73,5 +75,7 @@ namespace HBE::Renderer {
         int           m_drawCalls = 0;
         int           m_quadsSubmitted = 0;
         int           m_stateChanges = 0;
+        int           m_materialChanges = 0;
+        int           m_textureChanges = 0;
     };
 }

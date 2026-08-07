@@ -69,6 +69,8 @@ namespace HBE::Renderer {
 			if (fx.enabled && fx.shader) ++enabledCount;
 		}
 
+		m_lastPassCount = enabledCount;
+
 		if (enabledCount == 0) {
 			blitToScreen(m_scene, vpX, vpY, vpW, vpH);
 			return;

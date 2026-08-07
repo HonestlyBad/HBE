@@ -22,6 +22,21 @@ namespace HBE::Core::Profiler {
 			bool seenThisFrame = false;
 		};
 
+		struct GpuSectionStats
+		{
+			const char* name = nullptr;
+			int depth = 0;
+			std::size_t writeCursor = 0;
+			std::array<double, kRollingWindowFrames> samplesMs{};
+			std::size_t count = 0;
+			double currentMs = 0.0;
+			double avgMs = 0.0;
+			double minMs = 0.0;
+			double maxMs = 0.0;
+			std::size_t opensThisFrame = 0;
+			bool seenThisFrame = false;
+		};
+
 		struct OpenScope {
 			const char* name = nullptr;
 			std::uint64_t startNs = 0;
@@ -48,6 +63,20 @@ namespace HBE::Core::Profiler {
 			double frameMinMs = 0.0;
 			double frameMaxMs = 0.0;
 
+			// GPU
+			bool gpuSupported = false;
+			std::array<GpuSectionStats, kMaxSections> gpuSections{};
+			std::size_t gpuSectionCount = 0;
+			std::array<double, kRollingWindowFrames> gpuFrameSamplesMs{};
+			std::size_t gpuFrameCursor = 0;
+			std::size_t gpuFrameSampleCount = 0;
+			double gpuFrameAvgMs = 0.0;
+			double gpuFrameMinMs = 0.0;
+			double gpuFrameMaxMs = 0.0;
+
+			RendererStats renderer{};
+			bool rendererValid = false;
+
 			Snapshot snapshot{};
 		};
 
@@ -66,13 +95,81 @@ namespace HBE::Core::Profiler {
 			if (s.sectionCount >= kMaxSections) {
 				return -1;
 			}
+
 			SectionStats& st = s.sections[s.sectionCount];
 			st = SectionStats{};
 			st.name = name;
 			st.depth = depth;
+
 			const int idx = static_cast<int>(s.sectionCount);
 			++s.sectionCount;
 			return idx;
+		}
+
+		int findOrAddGpuSection(const char* name, int depth)
+		{
+			State& s = S();
+			for (std::size_t i = 0; i < s.gpuSectionCount; ++i)
+			{
+				if (s.gpuSections[i].name == name)
+				{
+					return static_cast<int>(i);
+				}
+			}
+			if (s.gpuSectionCount >= kMaxSections) return -1;
+
+			GpuSectionStats& st = s.gpuSections[s.gpuSectionCount];
+			st = GpuSectionStats{};
+			st.name = name;
+			st.depth = depth;
+
+			const int idx = static_cast<int>(s.gpuSectionCount);
+			++s.gpuSectionCount;
+			return idx;
+		}
+
+		void recomputeGpuRollingStats(GpuSectionStats& st)
+		{
+			if (st.count == 0)
+			{
+				st.avgMs = 0.0; st.minMs = 0.0; st.maxMs = 0.0;
+				return;
+			}
+			double sum = 0.0;
+			double mn = std::numeric_limits<double>::infinity();
+			double mx = -std::numeric_limits<double>::infinity();
+			for (std::size_t i = 0; i < st.count; ++i)
+			{
+				const double v = st.samplesMs[i];
+				sum += v;
+				if (v < mn) mn = v;
+				if (v > mx) mx = v;
+			}
+			st.avgMs = sum / static_cast<double>(st.count);
+			st.minMs = mn;
+			st.maxMs = mx;
+		}
+
+		void recomputeGpuFrameStats(State& s)
+		{
+			if (s.gpuFrameSampleCount == 0)
+			{
+				s.gpuFrameAvgMs = 0.0; s.gpuFrameMinMs = 0.0; s.gpuFrameMaxMs = 0.0;
+				return;
+			}
+			double sum = 0.0;
+			double mn = std::numeric_limits<double>::infinity();
+			double mx = -std::numeric_limits<double>::infinity();
+			for (std::size_t i = 0; i < s.gpuFrameSampleCount; ++i)
+			{
+				const double v = s.gpuFrameSamplesMs[i];
+				sum += v;
+				if (v < mn) mn = v;
+				if (v > mx) mx = v;
+			}
+			s.gpuFrameAvgMs = sum / static_cast<double>(s.gpuFrameSampleCount);
+			s.gpuFrameMinMs = mn;
+			s.gpuFrameMaxMs = mx;
 		}
 
 		void recomputeRollingStats(SectionStats& st) {
@@ -142,6 +239,16 @@ namespace HBE::Core::Profiler {
 		s.snapshot = Snapshot{};
 		s.inFrame = false;
 		s.frameIndex = 0;
+		s.gpuSections = {};
+		s.gpuSectionCount = 0;
+		s.gpuFrameSamplesMs = {};
+		s.gpuFrameCursor = 0;
+		s.gpuFrameSampleCount = 0;
+		s.gpuFrameAvgMs = 0.0;
+		s.gpuFrameMinMs = 0.0;
+		s.gpuFrameMaxMs = 0.0;
+		s.renderer = RendererStats{};
+		s.rendererValid = false;
 	}
 
 	void BeginFrame() {
@@ -153,6 +260,15 @@ namespace HBE::Core::Profiler {
 			s.sections[i].opensThisFrame = 0;
 			s.sections[i].seenThisFrame = false;
 		}
+
+		for (std::size_t i = 0; i < s.gpuSectionCount; ++i)
+		{
+			s.gpuSections[i].currentMs = 0.0;
+			s.gpuSections[i].opensThisFrame = 0;
+			s.gpuSections[i].seenThisFrame = false;
+		}
+		s.rendererValid = false;
+
 		s.scopeStackSize = 0;
 		s.currentDepth = 0;
 		s.frameStartNs = NowNs();
@@ -260,9 +376,124 @@ namespace HBE::Core::Profiler {
 			smp.opensThisFrame = st.opensThisFrame;
 			s.snapshot.sections.push_back(smp);
 		}
+
+		double gpuFrameSumMs = 0.0;
+		for (std::size_t i = 0; i < s.gpuSectionCount; ++i)
+		{
+			GpuSectionStats& st = s.gpuSections[i];
+			if (st.opensThisFrame == 0) continue;
+
+			st.samplesMs[st.writeCursor] = st.currentMs;
+			st.writeCursor = (st.writeCursor + 1) % kRollingWindowFrames;
+			if (st.count < kRollingWindowFrames) ++st.count;
+			recomputeGpuRollingStats(st);
+
+			if (st.depth == 0) gpuFrameSumMs += st.currentMs;
+		}
+
+		if (s.gpuSectionCount > 0 && s.gpuSupported)
+		{
+			s.gpuFrameSamplesMs[s.gpuFrameCursor] = gpuFrameSumMs;
+			s.gpuFrameCursor = (s.gpuFrameCursor + 1) % kRollingWindowFrames;
+			if (s.gpuFrameSampleCount < kRollingWindowFrames) ++s.gpuFrameSampleCount;
+			recomputeGpuFrameStats(s);
+		}
+
+		s.snapshot.gpu.supported = s.gpuSupported;
+		s.snapshot.gpu.frameMs = gpuFrameSumMs;
+		s.snapshot.gpu.frameAvgMs = s.gpuFrameAvgMs;
+		s.snapshot.gpu.frameMinMs = s.gpuFrameMinMs;
+		s.snapshot.gpu.frameMaxMs = s.gpuFrameMaxMs;
+		s.snapshot.gpu.frameSampleCount = s.gpuFrameSampleCount;
+		s.snapshot.gpu.sections.clear();
+		s.snapshot.gpu.sections.reserve(s.gpuSectionCount);
+		for (std::size_t i = 0; i < s.gpuSectionCount; ++i)
+		{
+			const GpuSectionStats& st = s.gpuSections[i];
+			Sample g{};
+			g.name = st.name;
+			g.depth = st.depth;
+			g.currentMs = st.currentMs;
+			g.avgMs = st.avgMs;
+			g.minMs = st.minMs;
+			g.maxMs = st.maxMs;
+			g.sampleCount = st.count;
+			g.opensThisFrame = st.opensThisFrame;
+			s.snapshot.gpu.sections.push_back(g);
+		}
+		s.snapshot.renderer = s.renderer;
 		s.inFrame = false;
 	}
+
 	const Snapshot& GetSnapshot() {
 		return S().snapshot;
 	}
+
+	void SetGpuSupported(bool supported)
+	{
+		S().gpuSupported = supported;
+	}
+
+	void PublishGpuSection(const char* name, std::uint64_t ns, int depth)
+	{
+		State& s = S();
+		if (!s.enabled) return;
+		if (name == nullptr) return;
+
+		const int idx = findOrAddGpuSection(name, depth);
+		if (idx < 0) return;
+
+		GpuSectionStats& st = s.gpuSections[idx];
+		const double ms = static_cast<double>(ns) / 1'000'000.0;
+		st.currentMs += ms;
+		++st.opensThisFrame;
+		if (!st.seenThisFrame)
+		{
+			st.depth = depth;
+			st.seenThisFrame = true;
+		}
+	}
+
+	void PublishGpuFrame(std::uint64_t)
+	{
+		// intentionally empty
+	}
+
+	void PublishRendererStats(const RendererStats& stats)
+	{
+		State& s = S();
+		if (!s.enabled) return;
+
+		const int prevActiveLights = s.renderer.activeLights;
+		const int prevShadowLights = s.renderer.shadowCastingLights;
+		const int prevLiveParticles = s.renderer.liveParticles;
+		const int prevTileChunks = s.renderer.visibleTileChunks;
+		const int prevPPPasses = s.renderer.postProcessPasses;
+
+		s.renderer = stats;
+
+		if (stats.activeLights == 0) s.renderer.activeLights = prevActiveLights;
+		if (stats.shadowCastingLights == 0) s.renderer.shadowCastingLights = prevShadowLights;
+		if (stats.liveParticles == 0) s.renderer.liveParticles = prevLiveParticles;
+		if (stats.visibleTileChunks == 0) s.renderer.visibleTileChunks = prevTileChunks;
+		if (stats.postProcessPasses == 0) s.renderer.postProcessPasses = prevPPPasses;
+
+		s.rendererValid = true;
+	}
+
+	void PublishLightStats(int activeLights, int shadowCastingLights)
+	{
+		State& s = S();
+		if (!s.enabled) return;
+		s.renderer.activeLights = activeLights;
+		s.renderer.shadowCastingLights = shadowCastingLights;
+	}
+
+	void PublishParticleStats(int liveParticles)
+	{
+		State& s = S();
+		if (!s.enabled) return;
+		s.renderer.liveParticles = liveParticles;
+	}
+
 }

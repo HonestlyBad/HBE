@@ -6,6 +6,7 @@
 #include "HBE/Renderer/Mesh.h"
 #include "HBE/Renderer/Material.h"
 #include "HBE/Renderer/PostProcessStack.h"
+#include "HBE/Renderer/GpuTimer.h"
 
 #include "HBE/Core/Log.h"
 #include "HBE/Core/Time.h"
@@ -19,6 +20,9 @@ namespace HBE::Renderer {
 
     using HBE::Core::LogError;
     using HBE::Core::LogInfo;
+
+    static int s_gpuFrameHandle = -1;
+    static int s_gpuSceneHandle = -1;
 
     // Build a 2D transform matrix (T * R * S) in column-major order
     void GLRenderer::buildTransformMatrix(const Transform2D& t, float out[16]) {
@@ -78,6 +82,8 @@ namespace HBE::Renderer {
 
         glDisable(GL_DEPTH_TEST);
 
+        HBE::Renderer::GpuTimer::Initialize();
+
         m_initialized = true;
         return true;
     }
@@ -97,9 +103,15 @@ namespace HBE::Renderer {
     void GLRenderer::endFrame(HBE::Platform::SDLPlatform& platform) {
         if (!m_initialized) return;
 
+        HBE::Renderer::GpuTimer::EndScope(s_gpuSceneHandle);
+        s_gpuSceneHandle = -1;
+
         if (m_postProcess && m_postProcess->isInitialized()) {
             m_postProcess->present(m_vpX, m_vpY, m_vpW, m_vpH);
         }
+
+        HBE::Renderer::GpuTimer::EndScope(s_gpuFrameHandle);
+        s_gpuFrameHandle = -1;
 
         platform.swapBuffers();
     }
@@ -254,6 +266,9 @@ namespace HBE::Renderer {
             glClear(GL_COLOR_BUFFER_BIT);
             glDisable(GL_SCISSOR_TEST);
         }
+
+        s_gpuFrameHandle = HBE::Renderer::GpuTimer::BeginScope("GpuFrame");
+        s_gpuSceneHandle = HBE::Renderer::GpuTimer::BeginScope("GpuScene");
     }
 
     void GLRenderer::getViewProjection(float out16[16]) const {

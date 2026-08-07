@@ -18,6 +18,9 @@ namespace HBE::Renderer {
 			Mesh* quadMesh,
 			const TileMap& map);
 		void draw(Renderer2D& r2d, const TileMap& map);
+
+		int visibleTileChunks() const { return m_visibleChunks; }
+		void resetFrameStats() { m_visibleChunks = 0; }
 	private:
 		struct TilesetDrawData {
 			Material material;
@@ -31,6 +34,7 @@ namespace HBE::Renderer {
 
 		Mesh* m_quadMesh = nullptr;
 		std::vector<TilesetDrawData> m_tilesets;
+		int m_visibleChunks = 0;
 
 		void computeTileUV(const TilesetDrawData& ts, int tileIndex, float outUV[4]) const;
 	};
