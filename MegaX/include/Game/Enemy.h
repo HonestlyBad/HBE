@@ -39,8 +39,11 @@ namespace MegaX {
 			m_solid = solidLayer;
 		}
 
-		void tick(float dt, const Player& player);
-		void render(HBE::Renderer::Renderer2D& r2d);
+		void fixedTick(float h, const Player& player);
+		void updateVisual(float dt);
+
+		void render(HBE::Renderer::Renderer2D& r2d, float alpha);
+
 		void onHeardGunshot(float sourceX, float sourceY);
 
 		void applyDifficulty(const DifficultyProfile& p);
@@ -179,6 +182,8 @@ namespace MegaX {
 
 			float m_x = 0.0f;
 			float m_y = 0.0f;
+			float m_prevX = 0.0f;
+			float m_prevY = 0.0f;
 			float m_feetY = 0.0f;
 
 			int m_facing = -1;

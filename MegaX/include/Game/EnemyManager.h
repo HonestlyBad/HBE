@@ -66,8 +66,10 @@ namespace MegaX {
         void setEffects(class Effects* fx) { m_effects = fx; }
         Effects* effects() const { return m_effects; }
 
-        void update(float dt);
-        void render(HBE::Renderer::Renderer2D& r2d);
+        void fixedUpdate(float h);
+        void updateVisual(float dt);
+        void render(HBE::Renderer::Renderer2D& r2d, float alpha);
+
         void debugDrawBoxes(HBE::Renderer::DebugDraw2D& dbg,
             HBE::Renderer::Renderer2D& r2d) const;
         void renderBubbles(HBE::Renderer::DebugDraw2D& dbg,

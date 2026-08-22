@@ -33,6 +33,7 @@ namespace MegaX {
 		Bullet b;
 		b.x = x;
 		b.y = y;
+		b.px = x; b.py = y;
 		b.vx = (dir >= 0 ? 1.0f : -1.0f) * speed;
 		b.alive = true;
 		m_bullets.push_back(b);
@@ -61,6 +62,7 @@ namespace MegaX {
 
 		for (auto& b : m_bullets) {
 			if (!b.alive) continue;
+			b.px = b.x; b.py = b.y;
 			b.x += b.vx * dt;
 
 			if (const int id = pointInSolid(map, layer, b.x, b.y); id != 0) {
@@ -79,10 +81,12 @@ namespace MegaX {
 			m_bullets.end());
 	}
 
-	void BulletManager::render(Renderer2D& r2d) {
+	void BulletManager::render(Renderer2D& r2d, float alpha) {
+		const float t = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha);
+
 		for (const auto& b : m_bullets) {
-			m_item.transform.posX = b.x;
-			m_item.transform.posY = b.y;
+			m_item.transform.posX = b.px + (b.x - b.px) * t;
+			m_item.transform.posY = b.py + (b.y - b.py) * t;
 			m_item.transform.scaleX = length;
 			m_item.transform.scaleY = height;
 			r2d.draw(m_item);

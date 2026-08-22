@@ -9,6 +9,7 @@
 #include "Game/Bullet.h"
 #include "Game/Effects.h"
 #include "Game/EnemyManager.h"
+#include "Game/PerfCapture.h"
 #include "World/World.h"
 
 namespace HBE::Core { class Application; }
@@ -19,9 +20,12 @@ namespace MegaX {
 	public:
 		void onAttach(HBE::Core::Application& app) override;
 		void onUpdate(float dt) override;
+		void onFixedUpdate(float fixedDt) override;
 		void onRender() override;
 
 		Difficulty m_difficulty = Difficulty::Difficult;
+
+		void setCaptureRequest(const PerfCaptureRequest& req){m_perf.configure(req);}
 
 	private:
 		void buildSpritePipeline();
@@ -31,6 +35,7 @@ namespace MegaX {
 		void clearTransientEntites();
 		void hotReloadShader();
 		void setupHotReloadWatches();
+		void tickPerfCapture(float dt);
 		
 		HBE::Core::Application* m_app = nullptr;
 		
@@ -48,6 +53,8 @@ namespace MegaX {
 		HBE::Core::FileWatcher m_watcher{};
 		HBE::Renderer::DebugDraw2D m_debug{};
 		bool m_showHitBoxes = false;
+
+		PerfCapture m_perf{};
 
 		std::string m_tileMapPath = "maps/level_01.json";
 		std::string m_spriteVsPath = "shaders/sprite.vert";

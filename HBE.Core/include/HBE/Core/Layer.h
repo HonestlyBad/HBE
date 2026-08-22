@@ -13,6 +13,7 @@ namespace HBE::Core {
 		virtual void onDetach() {}
 
 		virtual void onUpdate(float dt) {}
+		virtual void onFixedUpdate(float fixedDt) { (void)fixedDt;}
 		virtual void onRender() {}
 
 		virtual bool onEvent(Event& e) { (void)e; return false; }

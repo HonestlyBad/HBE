@@ -156,10 +156,10 @@ namespace MegaX {
         return hits;
     }
 
-    void EnemyManager::update(float dt) {
+    void EnemyManager::fixedUpdate(float h) {
         if (!m_player) return;
 
-        for (auto& e : m_enemies) e.tick(dt, *m_player);
+        for (auto& e : m_enemies) e.fixedTick(h, *m_player);
 
         for (auto& e : m_enemies) {
             if (e.isFinished()) continue;
@@ -178,8 +178,13 @@ namespace MegaX {
             m_enemies.end());
     }
 
-    void EnemyManager::render(Renderer2D& r2d) {
-        for (auto& e : m_enemies) e.render(r2d);
+    void EnemyManager::updateVisual(float dt)
+    {
+        for (auto& e : m_enemies) e.updateVisual(dt);
+    }
+
+    void EnemyManager::render(Renderer2D& r2d, float alpha) {
+        for (auto& e : m_enemies) e.render(r2d, alpha);
     }
 
     // --------------------------------------------------- gunshot broadcast

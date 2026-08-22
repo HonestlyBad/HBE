@@ -3,6 +3,7 @@
 #include "HBE/Core/LayerStack.h"
 #include "HBE/Core/Profiler.h"
 #include "HBE/Core/AssetPaths.h"
+#include "HBE/Core/Timestep.h"
 
 #include "HBE/Platform/SDLPlatform.h"
 #include "HBE/Platform/Audio.h"
@@ -36,6 +37,17 @@ namespace HBE::Core {
 
 		void run();
 		void requestQuit() { m_running = false; }
+
+		void setFixedTimestep(const FixedTimestepConfig& cfg);
+
+		const FixedTimestep& timestep() const {return m_timestep;}
+
+		float fixedDeltaSeconds() const {return m_timestep.fixedDeltaSeconds();}
+
+		float interpolationAlpha() const { return m_timestep.alpha(); }
+
+		void setTargetFrameRate(float hz);
+		float targetFrameRate() const {return m_targetFrameRate;}
 
 		void pushLayer(std::unique_ptr<Layer> layer);
 		void pushOverlay(std::unique_ptr<Layer> overlay);
@@ -76,6 +88,11 @@ namespace HBE::Core {
 		HBE::Renderer::ResourceCache m_resources;
 
 		LayerStack m_layers;
+
+		FixedTimestep m_timestep{};
+
+		float m_targetFrameRate = 0.0f;
+		double m_nextFrameTime = 0.0;
 
 		int m_winW = 0;
 		int m_winH = 0;

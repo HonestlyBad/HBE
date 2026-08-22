@@ -1,0 +1,60 @@
+name: "Copilot Setup Steps"
+
+on:
+    workflow_dispatch:
+    push:
+        paths:
+            - .github/workflows/copilot-setup-steps.yml
+    pull_request:
+        paths:
+            - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+    # Must be named exactly `copilot-setup-steps`.
+    copilot-setup-steps:
+        # Windows runner required — this project uses MSVC, Windows SDK, and OpenGL32.
+        # NOTE: The Copilot integrated firewall is incompatible with Windows.
+        # Disable it under Settings → Copilot → Coding agent → Firewall.
+        runs-on: windows-latest
+
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            # Download SDL3 development libraries (VC = MSVC prebuilt)
+            - name: Download SDL3
+              shell: pwsh
+              run: |
+                  $release = Invoke-RestMethod "https://api.github.com/repos/libsdl-org/SDL/releases/latest"
+                  $asset = $release.assets | Where-Object { $_.name -like "SDL3-devel-*-VC.zip" } | Select-Object -First 1
+                  Invoke-WebRequest $asset.browser_download_url -OutFile SDL3-VC.zip
+                  Expand-Archive SDL3-VC.zip -DestinationPath SDL3-tmp
+                  $inner = Get-ChildItem SDL3-tmp -Directory | Select-Object -First 1
+                  New-Item -ItemType Directory -Force -Path external\SDL3
+                  Copy-Item "$($inner.FullName)\include" external\SDL3\include -Recurse -Force
+                  Copy-Item "$($inner.FullName)\lib\x64"  external\SDL3\lib\x64  -Recurse -Force
+
+            # Download SDL3_mixer development libraries
+            - name: Download SDL3_mixer
+              shell: pwsh
+              run: |
+                  $release = Invoke-RestMethod "https://api.github.com/repos/libsdl-org/SDL_mixer/releases/latest"
+                  $asset = $release.assets | Where-Object { $_.name -like "SDL3_mixer-devel-*-VC.zip" } | Select-Object -First 1
+                  Invoke-WebRequest $asset.browser_download_url -OutFile SDL3_mixer-VC.zip
+                  Expand-Archive SDL3_mixer-VC.zip -DestinationPath SDL3_mixer-tmp
+                  $inner = Get-ChildItem SDL3_mixer-tmp -Directory | Select-Object -First 1
+                  New-Item -ItemType Directory -Force -Path external\SDL3_mixer
+                  Copy-Item "$($inner.FullName)\include" external\SDL3_mixer\include -Recurse -Force
+                  Copy-Item "$($inner.FullName)\lib\x64"  external\SDL3_mixer\lib\x64  -Recurse -Force
+
+            # nlohmann/json — header-only, single file
+            - name: Download nlohmann JSON
+              shell: pwsh
+              run: |
+                  $release = Invoke-RestMethod "https://api.github.com/repos/nlohmann/json/releases/latest"
+                  $asset = $release.assets | Where-Object { $_.name -eq "json.hpp" } | Select-Object -First 1
+                  New-Item -ItemType Directory -Force -Path external\nlohmann
+                  Invoke-WebRequest $asset.browser_download_url -OutFile external\nlohmann\json.hpp

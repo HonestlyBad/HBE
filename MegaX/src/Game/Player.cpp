@@ -118,6 +118,7 @@ namespace MegaX {
 		m_invulnTimer = 0.0f;
 		m_hurtFlashTimer = 0.0f;
 		m_x = x; m_y = y;
+		m_prevX = x; m_prevY = y;
 		m_vx = m_vy = 0.0f;
 		m_grounded = false;
 		m_crouching = false;
@@ -216,34 +217,36 @@ namespace MegaX {
 		animForState(s).play(true);
 	}
 
-	void Player::update(float dt) {
-		if (m_invulnTimer > 0.0f) m_invulnTimer = std::max(0.0f, m_invulnTimer - dt);
-		if (m_hurtFlashTimer > 0.0f) m_hurtFlashTimer = std::max(0.0f, m_hurtFlashTimer - dt);
+	void Player::fixedUpdate(float h) {
+		m_prevX = m_x;
+		m_prevY = m_y;
 
-		if (m_mode == Mode::Ghost) updateGhost(dt);
-		else                       updatePlay(dt);
+		if (m_invulnTimer > 0.0f) m_invulnTimer = std::max(0.0f, m_invulnTimer - h);
+		if (m_hurtFlashTimer > 0.0f) m_hurtFlashTimer = std::max(0.0f, m_hurtFlashTimer - h);
+
+		if (m_mode == Mode::Ghost) updateGhost(h);
+		else updatePlay(h);
 
 		m_jumpPressed = false;
 		m_firePressed = false;
+	}
 
-		m_item.transform.posX = m_x;
-		m_item.transform.posY = m_y;
-		m_item.transform.scaleX = kFrameW * kPixelScale * static_cast<float>(m_facing);
-		m_item.transform.scaleY = kFrameH * kPixelScale;
-
-		if (m_mode == Mode::Ghost) {
+	void Player::updateVisual(float dt)
+	{
+		if (m_mode == Mode::Ghost)
+		{
 			m_item.tint = Color4{ 0.6f, 0.8f, 1.0f, 0.5f };
-		}
-		else if (m_hurtFlashTimer > 0.0f) {
+		}else if (m_hurtFlashTimer > 0.0f)
+		{
 			const float k = m_hurtFlashTimer / hurtFlashTime;
-			m_item.tint = Color4{ 1.0f, 0.35f + (1.0f - k) * 0.65f, 0.35f + (1.0f - k) * 0.65f, 1.0f };
-		}
-		else if (m_invulnTimer > 0.0f) {
+			m_item.tint = Color4{ 1.0f, 0.35f + (1.0f - k) * 0.65f, 0.35f + (1.0f - k) * 0.65f, 1.0f};
+		}else if (m_invulnTimer > 0.0f)
+		{
 			const int frame = static_cast<int>(m_invulnTimer * 40.0f);
-			m_item.tint = (frame & 1) ? Color4{ 1.0f, 1.0f, 1.0f, 0.35f } : Color4{ 1.0f, 1.0f, 1.0f, 1.0f };
-		}
-		else {
-			m_item.tint = Color4{ 1.0f, 1.0f,1.0f,1.0f };
+			m_item.tint = (frame & 1) ? Color4{ 1.0f, 1.0f, 1.0f, 0.35f } : Color4{ 1.0f, 1.0f, 1.0f, 1.0f};
+		}else
+		{
+			m_item.tint = Color4{ 1.0f, 1.0f, 1.0f, 1.0f};
 		}
 
 		SpriteAnimation& a = animForState(m_animState < 0 ? 0 : m_animState);
@@ -400,7 +403,15 @@ namespace MegaX {
 		setAnimState(st);
 	}
 
-	void Player::render(Renderer2D& r2d) {
+	void Player::render(Renderer2D& r2d, float alpha) {
+		const float t = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha);
+
+		m_item.transform.posX = m_prevX + (m_x - m_prevX) * t;
+		m_item.transform.posY = m_prevY + (m_y - m_prevY) * t;
+
+		m_item.transform.scaleX = kFrameW * kPixelScale * static_cast<float>(m_facing);
+		m_item.transform.scaleY = kFrameH * kPixelScale;
+
 		r2d.draw(m_item);
 	}
 

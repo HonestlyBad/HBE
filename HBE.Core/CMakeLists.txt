@@ -8,6 +8,7 @@ add_library(HBE.Core STATIC
     src/Core/Log.cpp
     src/Core/Profiler.cpp
     src/Core/Time.cpp
+    src/Core/Timestep.cpp
     src/Core/UUID.cpp
     src/ECS/CombatEvents.cpp
     src/ECS/CombatSystem.cpp

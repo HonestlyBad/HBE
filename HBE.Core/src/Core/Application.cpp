@@ -9,6 +9,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_scancode.h>
 #include <cstdio>
+#include <cstdint>
 
 #include "HBE/Renderer/GpuTimer.h"
 
@@ -320,6 +321,39 @@ namespace HBE::Core {
 		m_gl.resizeViewport(m_winW, m_winH);
 	}
 
+	void Application::setFixedTimestep(const FixedTimestepConfig& cfg)
+	{
+		m_timestep.configure(cfg);
+
+		const FixedTimestepConfig& r = m_timestep.config();
+		char buf[192];
+		std::snprintf(buf, sizeof(buf),
+						"Application: fixed timestep %.2f Hz (%.4f s), max %d catch-up steps, frame clamp %.3f s.",
+						static_cast<double>(r.hz),
+						static_cast<double>(m_timestep.fixedDeltaSeconds()),
+						r.maxCatchUpSteps,
+						static_cast<double>(r.maxFrameSeconds));
+		LogInfo(buf);
+	}
+
+	void Application::setTargetFrameRate(float hz)
+	{
+		m_targetFrameRate = (hz > 0.0f) ? hz : 0.0f;
+		m_nextFrameTime = GetTimeSeconds();
+
+		char buf[128];
+		if (m_targetFrameRate > 0.0f)
+		{
+			std::snprintf(buf, sizeof(buf),
+				"Application: render rate capped at %.2f FPS.",
+				static_cast<double>(m_targetFrameRate));
+		}else
+		{
+			std::snprintf(buf, sizeof(buf), "Application: render rate uncapped.");
+		}
+		LogInfo(buf);
+	}
+
 	void Application::run() {
 		if (!m_initialized) {
 			LogError("Application::run called before initialize()");
@@ -329,6 +363,20 @@ namespace HBE::Core {
 		m_running = true;
 
 		double prevTime = GetTimeSeconds();
+
+		m_nextFrameTime = prevTime;
+		m_timestep.reset();
+		{
+			const FixedTimestepConfig& tsCfg = m_timestep.config();
+			char tsBuf[192];
+			std::snprintf(tsBuf, sizeof(tsBuf),
+							"Application: fixed timestep %.2f Hz (%.4f s), max %d catch-up steps, frame clamp %.3f s.",
+							static_cast<double>(tsCfg.hz),
+							static_cast<double>(m_timestep.fixedDeltaSeconds()),
+							tsCfg.maxCatchUpSteps,
+							static_cast<double>(tsCfg.maxFrameSeconds));
+			LogInfo(tsBuf);
+		}
 
 		while (m_running) {
 			HBE::Core::Profiler::BeginFrame();
@@ -363,6 +411,23 @@ namespace HBE::Core {
 				for (std::size_t i = 0; i < m_layers.m_layers.size(); ++i) {
 					auto& layer = m_layers.m_layers[i];
 					if (layer) layer->onUpdate(dt);
+				}
+			}
+
+			// fixed-rate simulation
+			{
+				HBE_PROFILE_SCOPE("FixedUpdate");
+
+				m_timestep.beginFrame(dt);
+				const float fixedDt = m_timestep.fixedDeltaSeconds();
+
+				while (m_timestep.consumeStep())
+				{
+					for(std::size_t i = 0; i < m_layers.m_layers.size(); ++i)
+					{
+						auto& layer = m_layers.m_layers[i];
+						if (layer) layer->onFixedUpdate(fixedDt);
+					}
 				}
 			}
 
@@ -478,7 +543,25 @@ namespace HBE::Core {
 			}
 #			endif
 
-			m_platform.delayMillis(1);
+			if (m_targetFrameRate > 0.0f)
+			{
+				const double period = 1.0 / static_cast<double>(m_targetFrameRate);
+				m_nextFrameTime += period;
+
+				const double nowLimit = GetTimeSeconds();
+				if (m_nextFrameTime <= nowLimit)
+				{
+					m_nextFrameTime = nowLimit;
+				}else
+				{
+					const double slack = m_nextFrameTime - nowLimit;
+					const std::uint32_t ms = static_cast<std::uint32_t>(slack * 1000.0);
+					if (ms > 0) m_platform.delayMillis(ms);
+				}
+			}else
+			{
+				m_platform.delayMillis(1);
+			}
 		}
 
 		LogInfo("Application exiting run loop.");

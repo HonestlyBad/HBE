@@ -25,6 +25,7 @@ namespace MegaX {
 
         struct Bullet {
             float x = 0.0f, y = 0.0f;
+            float px = 0.0f, py = 0.0f;
             float vx = 0.0f, vy = 0.0f;
             int damage = 1;
             bool alive = true;
@@ -37,7 +38,7 @@ namespace MegaX {
         void spawn(float sx, float sy, float aimX, float aimY, float speed, int damage);
 
         void update(float dt, const HBE::Renderer::TileMap* map, const HBE::Renderer::TileMapLayer* solidLayer, const HBE::Renderer::Camera2D& cam);
-        void render(HBE::Renderer::Renderer2D& r2d);
+        void render(HBE::Renderer::Renderer2D& r2d, float alpha);
         void clear() { m_bullets.clear(); m_impacts.clear(); }
 
         bool consumeImpacts(std::vector<Impact>& out) {

@@ -33,7 +33,7 @@ namespace MegaX {
 			const HBE::Renderer::TileMapLayer* solidLayer,
 			const HBE::Renderer::Camera2D& cam);
 
-		void render(HBE::Renderer::Renderer2D& r2d);
+		void render(HBE::Renderer::Renderer2D& r2d, float alpha);
 
 		void clear() { m_bullets.clear(); m_impacts.clear(); }
 		int  count() const { return static_cast<int>(m_bullets.size()); }
@@ -46,6 +46,7 @@ namespace MegaX {
 
 		struct Bullet {
 			float x = 0.0f, y = 0.0f;
+			float px = 0.0f, py = 0.0f;
 			float vx = 0.0f;
 			bool  alive = true;
 		};

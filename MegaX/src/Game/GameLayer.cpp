@@ -89,9 +89,13 @@ namespace MegaX {
 		LogInfo("MegaX GameLayer attached (Play mode; press G for Ghost).");
 
         setupHotReloadWatches();
+
+	    m_perf.setSceneLabel(m_tileMapPath);
 	}
 
 	void GameLayer::onUpdate(float dt) {
+	    tickPerfCapture(dt);
+
         HBE_PROFILE_SCOPE("SceneUpdate");
         m_watcher.poll(dt);
 
@@ -111,6 +115,11 @@ namespace MegaX {
 		// shooting (E) — semi/auto-fire handled in Player at a cadence
 		const bool firePressed = Input::IsKeyPressed(SDL_SCANCODE_E);
 		const bool fireHeld    = Input::IsKeyDown(SDL_SCANCODE_E);
+
+		m_player.setMoveInput(ix, iy);
+		m_player.setJumpInput(jumpPressed, jumpHeld);
+		m_player.setCrouchInput(crouchHeld);
+		m_player.setFireInput(firePressed, fireHeld);
 
 		if (Input::IsKeyPressed(SDL_SCANCODE_H)) {
 			m_player.toggleHelmet();
@@ -177,6 +186,15 @@ namespace MegaX {
                 snap.frameSampleCount);
             LogInfo(line);
 
+            std::snprintf(line, sizeof(line),
+                "Timestep: %.2f Hz (%.4f s) steps last frame %d dropped %d alpha %.3f",
+                static_cast<double>(m_app->timestep().config().hz),
+                static_cast<double>(m_app->fixedDeltaSeconds()),
+                m_app->timestep().stepsLastFrame(),
+                m_app->timestep().droppedStepLastFrame(),
+                static_cast<double>(m_app->interpolationAlpha()));
+            LogInfo(line);
+
             if (snap.gpu.supported) {
                 std::snprintf(line, sizeof(line),
                     "GPU frame: %.2f ms (avg %.2f, min %.2f, max %.2f, samples %zu)",
@@ -220,46 +238,14 @@ namespace MegaX {
 
             LogInfo("============================================");
         }
+	    if (Input::IsKeyPressed(SDL_SCANCODE_F9))
+	    {
+	        m_perf.toggle();
+	    }
 
-        {
-            HBE_PROFILE_SCOPE("Physics");
-            m_world.update(dt);
-            m_player.setMoveInput(ix, iy);
-            m_player.setJumpInput(jumpPressed, jumpHeld);
-            m_player.setCrouchInput(crouchHeld);
-            m_player.setFireInput(firePressed, fireHeld);
-            m_player.update(dt);
-
-            float bx, by; int bdir;
-            if (m_player.consumeShot(bx, by, bdir)) {
-                m_bullets.spawn(bx, by, bdir);
-
-                m_enemies.notifyGunshot(bx, by);
-
-                m_effects.spawnMuzzleFlash(bx, by, bdir);
-                const float casingX = m_player.x() + static_cast<float>(bdir) * 5.0f;
-                m_effects.spawnCasing(casingX, by, bdir);
-            }
-            m_bullets.update(dt, &m_world.map(), m_ground, m_camera.camera());
-        }
-
-        {
-            HBE_PROFILE_SCOPE("Combat");
-            m_enemies.checkBulletHits(m_bullets, &m_effects, 1);
-
-            {
-                std::vector<BulletManager::Impact> impacts;
-                if (m_bullets.consumeImpacts(impacts)) {
-                    for (const auto& imp : impacts) {
-                        m_effects.spawnBulletImpact(imp.x, imp.y, imp.tileId);
-                    }
-                }
-            }
-        }
-
-        if (m_player.landedThisFrame()) {
-            m_effects.spawnLandingDust(m_player.x(), m_player.feetY(), m_player.groundTileId());
-        }
+	    m_world.update(dt);
+	    m_player.updateVisual(dt);
+	    m_enemies.updateVisual(dt);
 
         {
             const bool moving = (ix != 0.0f);
@@ -267,55 +253,104 @@ namespace MegaX {
             m_effects.tickWalkDust(dt, m_player.x(), m_player.feetY(), m_player.groundTileId(), moving, grounded);
         }
 
-		m_camera.setFollowTarget(m_player.x(), m_player.y());
-		m_camera.setFollowVelocity(m_player.velX(), m_player.velY());
-		m_camera.update(dt);
-		m_app->gl().setCamera(m_camera.camera());
-
-        {
-            HBE_PROFILE_SCOPE("AI");
-            m_enemies.update(dt);
-
-            auto& ebm = m_enemies.enemyBullets();
-            ebm.update(dt, &m_world.map(), m_ground, m_camera.camera());
-
-            {
-                std::vector<EnemyBulletManager::Impact> impacts;
-                if (ebm.consumeImpacts(impacts)) {
-                    for (const auto& imp : impacts) {
-                        m_effects.spawnEnemyBulletImpact(imp.x, imp.y, imp.tileId);
-                    }
-                }
-            }
-
-            {
-                const AABB pb = m_player.hurtbox();
-                for (auto& b : ebm.bullets()) {
-                    if (!b.alive) continue;
-                    if (std::fabs(b.x - pb.cx) > pb.w * 0.5f) continue;
-                    if (std::fabs(b.y - pb.cy) > pb.h * 0.5f) continue;
-
-                    const int kbDir = (b.vx >= 0.0f) ? +1 : -1;
-                    if (m_player.takeDamage(b.damage, kbDir)) {
-                        m_effects.spawnBloodSplatter(b.x, b.y, kbDir);
-                        b.alive = false;
-                    }
-                }
-            }
-        }
-
         {
             HBE_PROFILE_SCOPE("Particles");
             m_effects.update(dt);
         }
 
-        // -------- Item 14: publish game-side stats to the profiler --------
+	    m_camera.setFollowTarget(m_player.x(), m_player.y());
+	    m_camera.setFollowVelocity(m_player.velX(), m_player.velY());
+	    m_camera.update(dt);
+	    m_app->gl().setCamera(m_camera.camera());
+
+        // -------- Publish game-side stats to the profiler --------
         HBE::Core::Profiler::PublishParticleStats(m_effects.liveParticles());
         HBE::Core::Profiler::PublishLightStats(0, 0); // MegaX has no lighting yet.
 	}
 
+    void GameLayer::onFixedUpdate(float fixedDt)
+	{
+	    {
+	        HBE_PROFILE_SCOPE("Physics");
+	        m_player.fixedUpdate(fixedDt);
+
+	        float bx, by; int bdir;
+	        if (m_player.consumeShot(bx, by, bdir))
+	        {
+	            m_bullets.spawn(bx, by, bdir);
+
+	            m_enemies.notifyGunshot(bx, by);
+
+	            m_effects.spawnMuzzleFlash(bx, by, bdir);
+	            const float casingX = m_player.x() + static_cast<float>(bdir) * 5.0f;
+	            m_effects.spawnCasing(casingX, by, bdir);
+	        }
+	        m_bullets.update(fixedDt, &m_world.map(), m_ground, m_camera.camera());
+	    }
+
+	    {
+	        HBE_PROFILE_SCOPE("Combat");
+	        m_enemies.checkBulletHits(m_bullets, &m_effects, 1);
+	        {
+	            std::vector<BulletManager::Impact> impacts;
+	            if (m_bullets.consumeImpacts(impacts))
+	            {
+	                for (const auto& imp : impacts)
+	                {
+	                    m_effects.spawnBulletImpact(imp.x, imp.y, imp.tileId);
+	                }
+	            }
+	        }
+	    }
+
+		if (m_player.landedThisFrame())
+		{
+			m_effects.spawnLandingDust(m_player.x(), m_player.feetY(), m_player.groundTileId());
+		}
+
+	    {
+		    HBE_PROFILE_SCOPE("AI");
+	    	m_enemies.fixedUpdate(fixedDt);
+
+	    	auto& ebm = m_enemies.enemyBullets();
+	    	ebm.update(fixedDt, &m_world.map(), m_ground, m_camera.camera());
+
+		    {
+			    std::vector<EnemyBulletManager::Impact> impacts;
+		    	if (ebm.consumeImpacts(impacts))
+		    	{
+		    		for (const auto& imp : impacts)
+		    		{
+		    			m_effects.spawnEnemyBulletImpact(imp.x, imp.y, imp.tileId);
+		    		}
+		    	}
+		    }
+
+		    {
+			    const AABB pb = m_player.hurtbox();
+		    	for (auto& b : ebm.bullets())
+		    	{
+		    		if (!b.alive) continue;
+		    		if (std::fabs(b.x - pb.cx) > pb.w * 0.5f) continue;
+		    		if (std::fabs(b.y - pb.cy) > pb.h * 0.5f) continue;
+
+		    		const int kbDir = (b.vx >= 0.0f) ? +1 : -1;
+		    		if (m_player.takeDamage(b.damage, kbDir))
+		    		{
+		    			m_effects.spawnBloodSplatter(b.x, b.y, kbDir);
+		    			b.alive = false;
+		    		}
+		    	}
+		    }
+	    }
+	}
+
 	void GameLayer::onRender() {
+	    HBE_PROFILE_SCOPE("GameRender");
+
 		Renderer2D& r2d = m_app->renderer2D();
+
+		const float alpha = m_app->interpolationAlpha();
 
 		r2d.beginScene(m_camera.camera(), RenderPass::World);
 
@@ -326,11 +361,11 @@ namespace MegaX {
 
         {
             HBE_PROFILE_SCOPE("SpriteRendering");
-            m_enemies.render(r2d);
+            m_enemies.render(r2d, alpha);
             m_enemies.renderBubbles(m_debug, r2d);
-            m_player.render(r2d);
-            m_bullets.render(r2d);
-            m_enemies.enemyBullets().render(r2d);
+            m_player.render(r2d, alpha);
+            m_bullets.render(r2d, alpha);
+            m_enemies.enemyBullets().render(r2d, alpha);
             m_effects.render(r2d);
         }
 
@@ -345,6 +380,24 @@ namespace MegaX {
         drawHud(r2d);
 
 		r2d.endScene();
+	}
+
+    void GameLayer::tickPerfCapture(float dt)
+	{
+	    PerfCapture::FrameCounts counts{};
+	    counts.enemies = m_enemies.aliveCount();
+	    counts.bullets = m_bullets.count();
+	    counts.enemyBullets = m_enemies.enemyBullets().count();
+	    counts.particles = m_effects.liveParticles();
+	    counts.difficulty = m_enemies.profile().label;
+
+	    m_perf.tick(dt, counts);
+
+	    if (m_perf.shouldQuit() && m_app)
+	    {
+	        LogInfo("MegaX: capture finished, --capture-quit requested. Exiting.");
+	        m_app->requestQuit();
+	    }
 	}
 
     void GameLayer::buildSpritePipeline() {

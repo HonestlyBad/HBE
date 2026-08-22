@@ -87,6 +87,8 @@ namespace MegaX {
         m_feetY = groundY;
         m_y = posYForFeet(groundY);
         m_facing = (facing >= 0) ? +1 : -1;
+        m_prevX = m_x;
+        m_prevY = m_y;
 
         // Physics body anchored to feet: box bottom == groundY, box top ==
         // groundY + boxHalfH*2. Cy sits halfH above feet.
@@ -162,16 +164,18 @@ namespace MegaX {
         return b;
     }
 
-    void Enemy::tick(float dt, const Player& player) {
+    void Enemy::fixedTick(float h, const Player& player) {
+        m_prevX = m_x;
+        m_prevY = m_y;
+
         m_landedThisFrame = false;
 
-        if (m_invulnTimer > 0.0f) m_invulnTimer = std::max(0.0f, m_invulnTimer - dt);
-        if (m_flashTimer > 0.0f) m_flashTimer = std::max(0.0f, m_flashTimer - dt);
-        if (m_jumpCooldown > 0.0f) m_jumpCooldown = std::max(0.0f, m_jumpCooldown - dt);
+        if (m_invulnTimer > 0.0f) m_invulnTimer = std::max(0.0f, m_invulnTimer - h);
+        if (m_flashTimer > 0.0f) m_flashTimer = std::max(0.0f, m_flashTimer - h);
+        if (m_jumpCooldown > 0.0f) m_jumpCooldown = std::max(0.0f, m_jumpCooldown - h);
 
         if (m_dead) {
-            if (m_deathTimer > 0.0f) m_deathTimer = std::max(0.0f, m_deathTimer - dt);
-            currentAnim().update(dt);
+            if (m_deathTimer > 0.0f) m_deathTimer = std::max(0.0f, m_deathTimer -h);
             return;
         }
 
@@ -189,17 +193,21 @@ namespace MegaX {
         }
 
         switch (m_state) {
-        case AIState::Patrol:     tickPatrol(dt, player);     break;
-        case AIState::Suspicious: tickSuspicious(dt, player); break;
-        case AIState::Alert:      tickAlert(dt, player);      break;
-        case AIState::Chase:      tickChase(dt, player);      break;
-        case AIState::Search:     tickSearch(dt, player);     break;
-        case AIState::Return:     tickReturn(dt, player);     break;
+        case AIState::Patrol:     tickPatrol(h, player);     break;
+        case AIState::Suspicious: tickSuspicious(h, player); break;
+        case AIState::Alert:      tickAlert(h, player);      break;
+        case AIState::Chase:      tickChase(h, player);      break;
+        case AIState::Search:     tickSearch(h, player);     break;
+        case AIState::Return:     tickReturn(h, player);     break;
         }
 
-        applyPhysics(dt);
+        applyPhysics(h);
 
         setAnimState((m_grounded && std::fabs(m_vx) > 5.0f) ? AnimState::Walk : AnimState::Idle);
+    }
+
+    void Enemy::updateVisual(float dt)
+    {
         currentAnim().update(dt);
     }
 
@@ -496,11 +504,13 @@ namespace MegaX {
         return (m_animState == AnimState::Walk) ? m_walkAnim : m_idleAnim;
     }
 
-    void Enemy::render(Renderer2D& r2d) {
+    void Enemy::render(Renderer2D& r2d, float alpha) {
         if (isFinished()) return;
 
-        m_item.transform.posX = m_x;
-        m_item.transform.posY = m_y;
+        const float t = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha);
+
+        m_item.transform.posX = m_prevX + (m_x - m_prevX) * t;
+        m_item.transform.posY = m_prevY + (m_y - m_prevY) * t;
         m_item.transform.scaleX = kFrameW * kPixelScale * static_cast<float>(m_facing);
         m_item.transform.scaleY = kFrameH * kPixelScale;
 

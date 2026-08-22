@@ -7,6 +7,7 @@ add_executable(MegaX
     src/Game/EnemyBullet.cpp
     src/Game/EnemyManager.cpp
     src/Game/GameLayer.cpp
+    src/Game/PerfCapture.cpp
     src/Game/Player.cpp
     src/World/World.cpp
 )
@@ -14,6 +15,13 @@ add_executable(MegaX
 target_include_directories(MegaX PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+option(MEGAX_PROFILE_IN_RELEASE
+    "Keep MegaX's HBE_PROFILE_SCOPE timers alive in Release builds" OFF)
+
+if(MEGAX_PROFILE_IN_RELEASE)
+    target_compile_definitions(MegaX PRIVATE HBE_PROFILE_ENABLED=1)
+endif()
 
 target_link_libraries(MegaX PRIVATE
     HBE.Core

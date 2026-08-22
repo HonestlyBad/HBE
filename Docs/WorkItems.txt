@@ -1,0 +1,232 @@
+(DONE) 0. Initial Setup
+- Create the new game project, get the references needed from the game engine into the project, and setup the folder structure to ensure clean code and very organized creation of files is ensured. This step is completed when a blank window opens for the game engine, and normal "F11" full screen toggle works.
+
+(DONE) 1. Player Walk / Idle with Camera Lerp
+- Before we get deep into the game, I want to get the Player's  "Ghost State" done. Basically, it should be a black screen with the charecter somewhat centered, and able to walk around with A and D, move up with S and up with SPACE. The camera should follow the charecter and have a nice smooth lerp effect as well. This ghost state will be used throughout the game development so that while creating maps, I can not be target by enemies nor collide with collisions to ensure items are setup properly. Also, I should be able to switch between Helmet and not Helmet sprite for the character via the code / scene. The tilesets tile's will be 32x32 pixels, so the scale of the player should fit right accordingly.
+
+-ASSETS:
+Player/player.png
+Player/player-no-helm.png
+
+(DONE) 2. Create World out of TileSet
+- There are 3 different tilesets currently, where there will be more later, I believe the tile sets should have name like *dir folder*_tileset_1 when declared as there will be multiple types of tilesets later on. Also, some tiles will have animations that we will set up later on. For now, we need to be able to create the world and utilize the tiles to create it. This should follow the practices of the game engine as well. each tile is set at 32x32 pixels.
+
+-ASSETS:
+TileSets/Military/Static/Tileset1H.png
+TileSets/Military/Static/Tileset2H.png
+TileSets/Military/Static/Tileset3H.png
+
+(DONE) 3. Add Animated tiles to world
+- Some tiles will have their own animations, those tiles need to be added somehow to the list of tiles for the tileset and work with the json map.  
+- ASSETS:
+TileSets/Military/Animated/tile-8_Anim_spritesheet.png
+TileSets/Military/Animated/tile-13_Anim_spritesheet.png
+TileSets/Military/Animated/tile-14_Anim_spritesheet.png
+TileSets/Military/Animated/tile-15_Anim_spritesheet.png
+TileSets/Military/Animated/tile-20_Anim_spritesheet.png
+
+(DONE) 4. Player Movement / Jump, Crouch, Gravity and Collisions
+- Now we will implement Collisions with the world, and the player movement. Goal is to make it smooth but also work with the animations, and feel good like Mega Man X.
+
+(DONE) 5. Toggle Play Mode / Ghost Mode
+- There should be a hot key, that when pressed it will switch me to either play mode or ghost mode. the point of ghost mode is while building maps, I can just fly around, not collide with anything and not get aggroed by enemies (later on). But when pressed, the player will game back its normal gravity and controls and continue playing like 'normal'
+
+(DONE) 6. Player Shooting and Bullet Collisions with tiles / future - enemies.
+-The main thing with the player is he has a shooting animation and a throwing animation, right now we will focus on the shooting, if the player is shooting while jumping, i want it to knock him back alittle bit as if the gun is pushing him back in the air. With this, there should be a particle that looks similar to a sleek bullet firing from the tip of the gun to when it is either 4 tiles off screen or if it collides with a tile that it can collide with (or future enemy as well).
+
+(DONE) 7. Particle Effects for Player movement, bullet impacts, gun firing effects
+-The main particle effects we will implement here:
+Player movement, kicks up particles with similar color as the ground he is walking on
+Shooting - Other than the particle we are using for shooting, I would like bullet casings to be visible coming out of the gun and an obvious muzzle flash as well.
+When a bullet impacts something, it should have a small burst of particles that is the same color of what it collide with, as well as some metal "yellow" to show the bullet "exploding" on impact too.
+when the player lands after jumping, there should be a particle effect to show as if the player has some weight, when landing the particle effect disburses by his feet, the particles being the same color as the tile he lands on.
+
+(DONE) 8. First Enemy With Hit Boxes and Health
+-Create the first enemy and load it's sprite sheets properly. Should be able to configure the enemies health and damage as well as their hit and hurt boxes.
+-ASSETS:
+Enemies/RobotSoldier/RobotSoldier_Idle_Spritesheet.png
+Enemies/RobotSoldier/RobotSoldier_Shoot_Spritesheet.png
+Enemies/RobotSoldier/RobotSoldier_Walk_Spritesheet.png
+
+(DONE) 9. Enemy AI "Patrol" and "Player Detection"
+-Almost all enemies except the bosses will have some kind of Patrol and Player Detection. Basically, the enemy can have a patrol with certain start, stops and waits. When the player is in their "detect" range for HEARING, so if the player is not crouching and just walks up to the enemy, even if the enemy is turned around, it will hear the player coming , turn around then detect the player. when the Enemy senses the player, it will have a "?" over it's head. If the player is detected, a "!" will pop up above the enemie's head and then the enemy will start moving into range to shoot the player. For now, we will know its working of the enemy just follows around the player, jumps with the player, follows it thorughout the map. If the player is "hidden" aka behind a wall and crouched for longer than a few seconds, the enemy could loose its agro and walk back to its original post.
+
+(DONE) 10. Enemy Combat AI with different difficulties
+-So there will be three different game modes, "Casual, Difficult, Challenging." and each difficulty will scale the enemy health, damage as well how difficult the AI is to defeat. In casual, the enemy will be about half speed of the player, do lighter damage and doesn't hold agro as long, and is harder to detect the plyaer. then difficult, the enemy AI moves a bit faster, agro's alittle easier, does alittle more damage and has alittle more health. Challengine the enemy moves faster than the player, shoots more often and can trail it's shots (meaning guess where the player is going to move) and agro is much harder to get rid of.
+
+(DONE) 11. Ensure Reload Scene works for proper testing and relaoding without rebulding application
+-We had hot reload working pretty good in the Sandbox, we need to get that implemented here so continuous playing against enemies is easy to do without restarting the application
+
+(DONE) 12. Enemy Particle Effects
+-Like the player, the Enemy will need it's own set of particle effects for movement, shooting, bullet impacts and landing from jumping. This is also where when an enemy is defeated, an explosion particle effect will play on the sprite before the sprite fades out.  If the player is hit by the enemy, it should play a small blood splatter particle effect where the bullet hit the player. If the player hits the enemy, it does a spark effect when it hits as this enemy is a robot.
+
+(DONE) 13. [HBE] Add CPU Frame and System Timing
+- Add a lightweight profiling API that can time named CPU sections such as ApplicationUpdate, SceneUpdate, Physics, Combat, Particles, AI, TileRendering, SpriteRendering, Lighting, PostProcessing, and Audio. Timing must use RAII scopes so a section is ended safely when its scope exits. Store current-frame, rolling average, minimum, maximum, and sample-count values. The profiler must be optional in release builds or have negligible overhead when disabled. Expose the results through a public data structure; do not create an engine profiler window. This item is complete when MegaX can time at least five nested systems and read accurate millisecond values after every frame.
+
+(DONE) 14. [HBE] Add GPU Timing and Expanded Renderer Statistics
+- Use supported OpenGL timer queries to measure GPU time without blocking the CPU every frame. Results should be read a few frames later when available. Expand renderer statistics to include draw calls, submitted quads, rendered quads, culled sprites, material changes, texture changes, visible tile chunks, active lights, shadow-casting lights, and post-process passes. Unsupported GPU timing must fail gracefully while ordinary rendering continues. This item is complete when MegaX can log CPU frame time, GPU frame time, draw calls, quads, particles, and lights from one combined performance snapshot.
+
+(DONE) 15. [MEGAX] Create a Repeatable Performance Capture
+- Add a developer-only performance capture that records the HBE profiling snapshot to CSV for a configurable number of seconds. Include frame number, frame time, update time, render time, GPU time, draw calls, quads, entities, enemies, bullets, particles, lights, and memory/allocation information if HBE exposes it. Add a hotkey or command-line option to start the capture, but do not create a new engine UI. Establish initial performance budgets for 60 FPS and an aspirational 120 FPS mode. This item is complete when the same test room can produce a CSV that makes regressions between builds easy to compare.
+
+(DONE) 16. [HBE] Add a Fixed Gameplay Timestep
+- Update the application loop so gameplay simulation can run at a configurable fixed timestep while rendering remains independent. Use an accumulator, clamp extreme frame delays, limit catch-up steps, and expose an interpolation alpha for visual interpolation. Preserve the existing layer lifecycle and allow a layer to opt into fixed updates without breaking existing onUpdate behavior. Do not tie animation or visual-only particles to the fixed step unless configured. This item is complete when player movement and combat simulation produce nearly identical results at 30, 60, 120, and uncapped rendering rates.
+
+17. [HBE] Add Deterministic Named Random Streams
+- Create a reusable RandomStream class initialized from a 64-bit seed. It must generate deterministic integers, floats, booleans, ranges, weighted selections, and vector shuffles on every supported platform. Provide a way to derive independent child streams from a run seed and a stable name such as "level", "loot", "shop", or "encounter". Cosmetic random activity must not alter gameplay results. Add tests proving that equal seeds and names produce equal sequences while different names produce independent sequences. This item is complete when MegaX can print and reproduce the same level, shop, and loot results from one run seed.
+
+18. [HBE] Replace Fixed Input Actions with Game-Defined IDs
+- Refactor InputMap so games can register their own action and axis identifiers without editing an HBE enum. Keep primary and secondary bindings, keyboard, mouse, gamepad buttons, gamepad axes, rebinding, and persistence. Use a stable string or hashed identifier and include migration support for current bindings such as Jump, Attack, Pause, and FullscreenToggle. The engine may provide optional conventional defaults, but it must not decide the complete action set for every game. This item is complete when MegaX registers MoveX, MoveY, Jump, Crouch, Shoot, Dash, Interact, Pause, and GhostMode entirely from the game project.
+
+19. [HBE] Add Extensible Game-Component Serialization
+- Add a component serializer registry that lets a game register save and load callbacks for its own ECS components. Integrate it with SceneSerializer without adding MegaX-specific headers or dependencies to HBE. Unknown components should report a clear warning and, when possible, remain preserved for forward compatibility. Include serializer version information and a migration callback so component formats can evolve. This item is complete when a small test component defined only inside MegaX survives a scene save/load round trip.
+
+
+20. [MEGAX] Build the Golden Visual Benchmark Room
+- Create one handcrafted test room that represents the intended final visual and combat density of MegaX. Include multiple tile layers, the player, several RobotSoldiers, at least one heavy combat moment, animated environmental tiles, foreground silhouettes, background scenery, particles, projectiles, and positional audio. Add fixed spawn points and a repeatable seed so performance captures remain comparable. Do not add procedural generation yet. This item is complete when the room can be reloaded consistently and serves as the shared test location for all upcoming lighting and performance work.
+
+21. [HBE] Add Reusable Parallax Layer Rendering
+- Add a reusable parallax layer or component that supports texture/sprite layers moving at configurable horizontal and vertical ratios relative to the camera. Support repeating backgrounds, finite layers, layer tint, render layer, optional pixel snapping, and independent zoom response. Keep it data-driven and usable by games other than MegaX. This item is complete when the golden room has at least three background depths and one foreground layer with no visible seams during camera movement.
+
+22. [HBE] Expand 2D Materials for Lit Pixel Art
+- Create a modern SpriteMaterial2D path with optional albedo, normal, emissive, and mask/material textures. Existing sprites with only an albedo texture must continue rendering correctly using default normal and emissive values. Allow material parameters such as emissive strength, normal strength, receive-lighting, cast-shadow, and layer mask. Update batching keys so compatible materials remain batched and incompatible materials split predictably. This item is complete when one existing sprite renders unchanged and a second sprite reacts to light using normal and emissive maps.
+
+23. [HBE] Add Ambient and Point Lights
+- Introduce a Light2D component and rendering data for ambient light and point lights. A point light needs position, color, intensity, radius, falloff, enabled state, shadow flag, and layer mask. Cull lights that cannot affect the camera and place a configurable limit on simultaneously active lights. Keep lighting resolution configurable so it can later run below the logical render resolution. This item is complete when multiple colored point lights illuminate sprites and tiles in the golden room without shadows.
+
+24. [HBE] Add Cone and Pulsing Light Options
+- Extend Light2D with cone/spot lights using direction, cone angle, edge softness, and range. Add optional reusable pulse and flicker parameters that use visual-only randomness and cannot affect deterministic gameplay streams. Avoid adding game-specific presets; MegaX should create weapon flashes and machinery lights from these generic parameters. This item is complete when a rotating searchlight and a flickering environmental light work in the golden room.
+
+25. [HBE] Add Authored 2D Occluders and Shadow Masks
+- Add an Occluder2D representation for line segments or polygons that block shadow-casting lights. Build a shadow-mask pass for point and cone lights, include configurable softness and bias, and ensure non-shadow lights skip the extra work. Occluders outside a light's influence must be culled. Begin with authored occluders before attempting automatic tilemap extraction. This item is complete when a movable test occluder casts a stable shadow from both point and cone lights.
+
+26. [HBE] Generate Chunked Tilemap Occluders
+- Build occluder geometry from solid tilemap cells. Merge adjacent solid edges and store results in spatial chunks rather than treating every tile as a separate occluder. Rebuild only affected chunks when a map or destructible tile changes. One-way platforms and slopes must follow explicit shadow-casting metadata instead of being guessed. This item is complete when walls in the golden room cast correct shadows and the occluder count is substantially lower than the number of solid tiles.
+
+27. [HBE] Add Lit Scene Composition and Emissive Rendering
+- Create the final 2D composition path that combines albedo, ambient lighting, dynamic lights, shadow masks, and emissive data. Keep world, particles, UI, and debug overlays in intentional passes so game UI is not accidentally darkened by world lighting. Add configuration for unlit sprites and additive effects. This item is complete when the golden room can switch between the old unlit renderer and the new lit renderer for direct visual and performance comparison.
+
+28. [HBE] Add Bloom and Color-Grading Post Effects
+- Add reusable bloom with threshold, intensity, radius, and quality controls. Add color grading using a practical palette or lookup-table approach supported by the current OpenGL target. Both effects must integrate with PostProcessStack, be independently enabled, and expose presets without hard-coding MegaX values. Prevent UI text from becoming blurry unless the game explicitly renders it before post-processing. This item is complete when emissive lights and projectiles bloom while ordinary pixel edges remain readable.
+
+29. [MEGAX] Polish and Lock the Golden Room Visual Target
+- Use the new HBE lighting features to finish one production-quality presentation pass. Add normal and emissive maps where valuable, tune ambient color, place point and cone lights, configure tile shadows, add bloom and color grading, and improve muzzle flashes, bullet impacts, enemy explosions, landing weight, hit-stop, and camera shake. Avoid covering weak combat readability with excessive effects. This item is complete when the room represents the quality bar that future generated rooms and biomes must meet.
+
+30. [MEGAX] Stress-Test and Optimize the Golden Room
+- Create controlled stress presets for increasing enemies, bullets, particles, lights, and shadow casters. Capture performance at each preset and find the first real bottleneck using Items 13-15. Optimize only measured problems, with likely candidates including tile chunk culling, texture/material state changes, particle limits, light culling, shadow resolution, or allocations. Do not implement GPU particles or multithreading unless the measurements justify them. This item is complete when the normal golden-room workload stays inside the chosen frame budget with documented headroom.
+
+
+31. [MEGAX] Add the Run Lifecycle and RunState
+- Create a RunManager and serializable RunState that own the current run seed, level number, biome, difficulty, mode modifiers, coins, elapsed time, boss times, lives consumed, current health, owned items, and completed encounters. Define clear states such as NotInRun, StartingLevel, PlayingLevel, LevelCleared, InShop, BossIntro, BossFight, Reward, RunWon, and RunLost. Scene code should request transitions through RunManager rather than directly loading arbitrary levels. This item is complete when a developer command can start, advance, fail, and reset a blank run while printing correct state transitions.
+
+32. [MEGAX] Create the Player Stat Calculation Pipeline
+- Define the initial player stats needed by combat and movement, including maximum health, armor, movement speed, jump force, damage, fire rate, projectile speed, critical chance, critical damage, knockback, and any existing values already used by Player. Calculate final values in a stable order from base character values, run upgrades, equipment, mode modifiers, and temporary effects. Track the source of every modifier for debugging. This item is complete when adding and removing test modifiers recalculates the player correctly without permanently mutating base values.
+
+33. [MEGAX] Add Data-Driven Item Definitions
+- Define a versioned JSON format for armor, perks, and other run items. Each item should have a stable ID, display name, description, rarity, base price, icon path, tags, stat modifiers, effect IDs, stack rules, maximum stacks, conflicts, and unlock requirements. Add an ItemRegistry that loads and validates all definitions at startup and rejects duplicate IDs or invalid references with useful errors. Create a small test set across Common, Uncommon, Rare, and Legendary rarities. This item is complete when game code can retrieve validated item definitions by ID without hard-coded item tables.
+
+34. [MEGAX] Implement Generic Stat Modifiers from Items
+- Apply item-defined Add, Multiply, Override, Minimum, and Maximum operations to PlayerStats in a documented order. Support stacking rules such as unique, stackable, diminishing returns, and capped. Ensure removing an item removes only the modifiers contributed by that item instance. Add tests for conflicting operations and multiple copies. This item is complete when several ordinary armor and perk items can modify the player entirely through JSON data.
+
+35. [MEGAX] Add Code-Registered Special Item Effects
+- Create an ItemEffectRegistry mapping stable effect IDs to game-side behavior factories or callbacks. Support hooks such as OnDamageDealt, OnDamageTaken, OnEnemyKilled, OnProjectileFired, OnCriticalHit, OnDash, OnRoomStarted, OnRoomCleared, and OnBossStarted. Subscribe through the existing HBE EventBus where appropriate and guarantee cleanup when an item is removed or a run ends. HBE must not learn these MegaX effect types. This item is complete when one test item creates chain damage on a critical hit and another grants a temporary bonus after clearing a room.
+
+36. [MEGAX] Add Coins and World Pickups
+- Add coin drops, coin pickup entities, attraction/pickup range, pickup feedback, and RunState currency updates. Coin rewards should come from configured enemy or encounter reward data rather than being embedded in Enemy code. Add particle, sound, and HUD feedback while preventing duplicate collection. This item is complete when enemies can drop coins, the player collects them, and the amount survives level transitions during the current run.
+
+37. [MEGAX] Create Weighted Loot Tables
+- Define versioned loot tables with entries for direct item IDs, rarity groups, item tags, nested tables, weights, minimum level, biome restrictions, mode restrictions, and guaranteed results. Use only the named loot RandomStream so results are reproducible. Filter locked, conflicting, maximum-stack, and otherwise invalid items before selection, then define a safe fallback when no valid entry remains. This item is complete when a seed produces the same legal reward sequence across repeated runs.
+
+38. [MEGAX] Generate Shop Inventories
+- Add ShopGenerator using the named shop RandomStream. Generate a configurable number of unique item choices based on run level, rarity weights, player build, mode, and price scaling. Avoid offering items that cannot be purchased or used unless that behavior is intentionally configured. Store the generated inventory in RunState so reopening a shop does not reroll it. This item is complete when two runs with the same seed and history receive the same shop while a different seed produces different legal choices.
+
+39. [MEGAX] Build the In-Game Shop Screen and Purchase Flow
+- Create a MegaX-owned shop screen using existing HBE rendering, text, and input APIs. Show the item icon, name, rarity, description, price, current coin count, relevant stat changes, and whether the item conflicts with the current build. Implement selection for keyboard and gamepad, purchase confirmation, insufficient-funds feedback, item application, and leaving the shop. Do not build a general engine editor or add shop concepts to HBE UI. This item is complete when a player can clear a level, enter the shop, buy one item, see its effect, and continue.
+
+40. [MEGAX] Add Level Completion and Shop Transitions
+- Define how a combat level becomes complete, prevent completion from firing twice, stop or clean up remaining projectiles and temporary effects, award the configured room/level reward, and transition to the shop. After leaving the shop, load the next level while preserving RunState and rebuilding only scene-specific objects. Add transition fades and loading/error handling. This item is complete when the player can finish two handcrafted levels with a working shop between them without restarting the application.
+
+41. [MEGAX] Add Elite Encounters and Guaranteed Rewards
+- Add an elite-enemy or elite-room marker separate from ordinary difficulty scaling. Elite encounters should have explicit encounter rules, enhanced enemy behavior or modifiers, a clear visual identity, and a guaranteed configured reward. The reward must use the loot-table system rather than hard-coded item IDs. This item is complete when the second handcrafted level contains an elite encounter that reliably awards a valid upgrade once and only once.
+
+42. [MEGAX] Create a Reusable Boss Encounter Framework
+- Create a MegaX boss framework supporting introduction, arena lock, health bar, named phases, phase transitions, attack scheduling, damage windows, defeat sequence, and reward state. Boss logic may use code for unique behavior, but shared timing and lifecycle behavior should not be duplicated between bosses. Keep it in MegaX unless a genuinely game-agnostic primitive is discovered. This item is complete when a placeholder boss can enter, change phase at a health threshold, die, unlock the arena, and notify RunManager.
+
+43. [MEGAX] Implement the First Complete Boss
+- Build one complete boss suitable for the end of Level 3. Give it multiple readable attacks, at least two phases, telegraphs, punishable openings, difficulty-profile integration, appropriate particles/audio/lighting, and behavior that exercises the player's movement and shooting. Avoid relying only on increased health or damage to create challenge. This item is complete when the boss can be defeated consistently on all supported difficulties without debug commands.
+
+44. [MEGAX] Grade Boss Performance and Generate the Boss Reward
+- Track boss completion time, damage taken, lives consumed, optional challenge conditions, and difficulty. Convert these into a transparent performance grade and reward-quality modifier. A boss must always award at least the configured minimum rarity; strong performance raises Legendary odds and exceptional performance may guarantee it. Add a pity value so repeated missed Legendary rolls gradually improve future odds. Store all inputs and the final roll for reproducibility. This item is complete when repeated seeded tests produce understandable Rare or Legendary rewards based on the configured performance rules.
+
+45. [MEGAX] Complete the First Three-Level Run
+- Connect two normal handcrafted levels, the elite encounter, their shops, the Level 3 boss, and the boss reward into one uninterrupted run. Add the minimum HUD needed for health, coins, level, items, and boss health. Ensure temporary scene data is cleared while run data persists. This item is complete when a player can start from the title flow, clear all three levels, purchase upgrades, defeat the boss, receive an item, and reach a continue/run-complete screen.
+
+46. [MEGAX] Add Run Failure, Restart, and Seed Display
+- Define exactly when a life is consumed, when the current encounter restarts, and when the entire run ends. Add a run-results screen containing seed, level reached, elapsed time, bosses defeated, coins earned/spent, items collected, and cause of failure. Support starting a new random run and retrying the same seed. This item is complete when failure never requires restarting the executable and the same seed can be copied and reproduced.
+
+47. [MEGAX] Save and Resume an Active Run
+- Serialize RunState, current level identity, player state, generated shop inventories, RNG stream state or deterministic counters, acquired items, and mode/difficulty choices into the user-data directory. Use atomic or temporary-file replacement so a failed write does not destroy the previous save. Add versioning and clear errors for incompatible saves. This item is complete when the application can close during a run and resume with the same build, level, inventory, seed, and future random results.
+
+
+48. [MEGAX] Convert Difficulty into Data-Driven Profiles
+- Replace scattered Casual, Difficult, and Challenging conditionals with validated DifficultyProfile data. Include enemy health, damage, movement, reaction time, detection range, hearing, aggro retention, shot frequency, aim prediction, boss behavior parameters, shop prices, and reward modifiers. AI should consume resolved parameters rather than checking the difficulty enum throughout its behavior code. This item is complete when switching profiles changes the complete balance package without recompiling MegaX.
+
+49. [MEGAX] Add Composable Run Mode Modifiers
+- Define data-driven ModeModifier records that can change player rules, enemy rules, environment presentation, economy, loot, and run restrictions. Start with a small test set such as Glass Cannon, Blackout, Overclocked, and Scarcity. Effects should be expressed through the stat, event, lighting, encounter, and loot systems already implemented instead of one-off checks across the codebase. This item is complete when at least two compatible modifiers can run together and produce the expected combined rules.
+
+50. [MEGAX] Validate Modifier Compatibility and Final Rules
+- Add deterministic ordering, priority, incompatibility tags, and conflict reporting for difficulty, mode, item, equipment, and temporary modifiers. Create a resolved run-rules snapshot showing the final values and which source changed each value. Invalid combinations should be rejected before the run starts rather than producing undefined mid-run behavior. This item is complete when automated tests cover ordering, conflicts, caps, and combined modifiers.
+
+
+51. [MEGAX] Define the Procedural Room-Template Format
+- Extend or accompany the existing map JSON with a versioned MegaX room-template format. Store the tilemap reference, room bounds, entrance/exit connectors, required abilities, spawn regions, encounter sockets, reward sockets, shop sockets, hazard sockets, secret sockets, camera bounds, lighting metadata, biome tags, difficulty range, and room tags such as traversal, arena, vertical, rest, challenge, or boss. Keep HBE responsible only for generic map/scene data. This item is complete when two handcrafted rooms can be loaded and inspected as validated templates.
+
+52. [MEGAX] Add Connector and Traversal Validation
+- Define connector types, direction, position, size, allowed matches, and transition rules. Add validation ensuring connectors align to the tile grid, do not overlap solid geometry, and have enough safe space for the player. Record traversal requirements such as basic jump, dash, wall movement, or another future ability. This item is complete when invalid room connectors produce actionable errors before a run begins.
+
+53. [MEGAX] Generate a Seeded Room Graph
+- Create a generator that builds an abstract level graph before placing tilemaps. Support a start room, configurable critical-path length, optional branches, reward/rest/shop placement constraints, elite placement, and an exit or boss room. Use the named level RandomStream and store the resulting graph in RunState. Do not assemble room geometry yet. This item is complete when the same seed creates the same valid graph and printed graph output clearly shows the critical path and branches.
+
+54. [MEGAX] Select and Assemble Compatible Room Templates
+- Choose room templates for each graph node using connector compatibility, biome, difficulty, tags, required abilities, recent-room repetition, and encounter budget. Position rooms without overlap and create the transitions between them. If selection reaches an impossible state, backtrack or regenerate deterministically with a bounded attempt count and a clear failure report. This item is complete when a seeded graph becomes a traversable level made from authored room templates.
+
+55. [MEGAX] Validate Procedural Level Reachability
+- Add an offline validation pass that checks a generated level from start to exit using connector and traversal metadata. Verify that mandatory rewards, shops, and boss access are reachable, required abilities are available, rooms do not overlap, and no connector leads into solid or empty space. Save the seed and generation trace for every failure. This item is complete when thousands of generated test levels can be checked automatically without running the graphical game.
+
+56. [MEGAX] Add Encounter Budgets and Enemy Composition Tables
+- Define encounter tables that turn a room's difficulty budget, biome, run level, difficulty profile, and mode modifiers into enemy groups. Give each enemy type a cost and tags such as ranged, melee, flying, support, or elite. Enforce composition rules and spawn-region compatibility so encounters remain fair and readable. Use the named encounter RandomStream. This item is complete when the same room can receive varied but legal enemy groups across seeds.
+
+57. [MEGAX] Add Room Activation, Locking, and Completion
+- Rooms should activate when the player crosses the intended boundary, spawn or wake their encounter, optionally lock exits, track encounter-specific enemies, complete exactly once, award configured rewards, and release exits. Inactive rooms should suspend expensive AI, particles, and audio where appropriate. Persist completed room state when moving between rooms. This item is complete when the player can backtrack without replaying completed encounters or duplicating rewards.
+
+58. [MEGAX] Add Biome Presentation Profiles
+- Define biome data that selects tilesets, background/parallax sets, ambient lighting, fog or atmosphere, color grading, music, ambient audio, particle ambience, compatible rooms, enemies, hazards, and loot-table adjustments. Biome data should configure existing systems rather than branching throughout rendering and gameplay code. This item is complete when the same room structure can be presented as two clearly different biomes through data changes.
+
+
+59. [MEGAX] Add Permanent Player Profile and Unlocks
+- Create a versioned profile save separate from active RunState. Store unlocked items, modes, characters or armor sets, achievements/challenges, statistics, settings references, and any future progression currency. Permanent unlocks should expand future possibilities without silently altering an active run's deterministic results. Include safe defaults, corruption handling, and migration support. This item is complete when completing a challenge unlocks an item that becomes eligible in later runs after restarting the application.
+
+60. [MEGAX] Add Automated Balance and Content Validation
+- Build command-line or test-run validation for item definitions, loot tables, shops, difficulty profiles, mode modifiers, room templates, encounter tables, and biome references. Detect duplicate IDs, missing assets, circular loot tables, impossible price ranges, invalid modifier operations, empty reward pools, connector problems, and contradictory tags. Produce readable errors with file and definition names. Do not create an HBE editor UI. This item is complete when intentionally broken content is caught before the game enters its main loop.
+
+61. [MEGAX] Add Deterministic Run Simulation Tests
+- Create tests that simulate generation and reward decisions for many seeds without rendering. Verify that equal seeds stay identical, generated levels are valid, shops contain legal items, boss rewards respect rarity guarantees, modifier combinations resolve consistently, and no required loot table becomes empty. Save the smallest failing seed and relevant trace. This item is complete when a large seed batch runs automatically and every failure can be reproduced in the graphical game.
+
+62. [HBE/MEGAX] Run a Full Performance and Stability Pass
+- Profile a complete procedural three-level run, the golden room, the first boss, and deliberately extreme combat scenes. Check frame-time spikes, GPU stalls, memory growth, excessive allocations, draw-call growth, particle limits, light/shadow cost, save/load behavior, and scene-transition cleanup. Fix measured reusable bottlenecks in HBE and game-specific bottlenecks in MegaX. Do not redesign stable systems solely for theoretical performance. This item is complete when the agreed target hardware and quality settings remain within budget across an entire run with no progressive memory or entity leaks.
+
+63. [MEGAX] Expand Content Using the Proven Systems
+- Only after the first procedural run is stable, expand the number of enemies, elites, bosses, room templates, biomes, items, armor pieces, perks, challenges, and mode modifiers. Add content in small themed sets and run automated validation, deterministic simulations, balance checks, and performance captures after each set. Favor mechanically distinct choices and interactions over many percentage-only upgrades. This item is complete when additional content increases meaningful build and encounter variety without requiring new one-off architecture for every addition.
+
+
+FIRST MAJOR PLAYABLE MILESTONE
+- Items 13-30 establish measurable performance and the final visual target.
+- Items 31-47 establish one complete handcrafted three-level roguelike run.
+- At the end of Item 47, stop and playtest before beginning procedural generation.
+- Items 48-50 make difficulty and special modes composable.
+- Items 51-58 add room-based procedural generation and biome variation.
+- Items 59-63 add persistent unlocks, validation, stability, and safe content expansion.
+
+RULE FOR FUTURE ENGINE CHANGES
+- Implement a new feature in MegaX first unless it is clearly a reusable primitive.
+- Move or design it in HBE only when its public API can be explained without referring to MegaX-specific rules, content, story, coins, loot, shops, bosses, or run progression.

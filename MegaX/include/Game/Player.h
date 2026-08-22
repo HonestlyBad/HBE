@@ -77,8 +77,9 @@ namespace MegaX {
 		void toggleHelmet() { setHelmet(!m_helmet); }
 		bool hasHelmet() const { return m_helmet; }
 
-		void update(float dt);
-		void render(HBE::Renderer::Renderer2D& r2d);
+		void fixedUpdate(float h);
+		void updateVisual(float dt);
+		void render(HBE::Renderer::Renderer2D& r2d, float alpha);
 
 		// --- tunables (world px, seconds) ---
 		float moveSpeed = 200.0f;   // ghost fly speed AND play-mode run speed
@@ -101,6 +102,7 @@ namespace MegaX {
 
 		// position = sprite center (world space)
 		float m_x = 0.0f, m_y = 0.0f;
+		float m_prevX = 0.0f, m_prevY = 0.0f;
 		float m_vx = 0.0f, m_vy = 0.0f;
 		float m_inX = 0.0f, m_inY = 0.0f;
 

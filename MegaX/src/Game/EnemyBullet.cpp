@@ -41,6 +41,7 @@ namespace MegaX {
 		Bullet b;
 		b.x = sx;
 		b.y = sy;
+		b.px = sx; b.py = sy;
 		b.vx = dx * speed;
 		b.vy = dy * speed;
 		b.damage = std::max(1, damage);
@@ -71,6 +72,7 @@ namespace MegaX {
 
 		for (auto& b : m_bullets) {
 			if (!b.alive) continue;
+			b.px = b.x; b.py = b.y;
 			b.x += b.vx * dt;
 			b.y += b.vy * dt;
 
@@ -97,11 +99,13 @@ namespace MegaX {
 		m_bullets.erase(std::remove_if(m_bullets.begin(), m_bullets.end(), [](const Bullet& b) {return !b.alive; }), m_bullets.end());
 	}
 
-	void EnemyBulletManager::render(Renderer2D& r2d) {
+	void EnemyBulletManager::render(Renderer2D& r2d, float alpha) {
+		const float t = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha);
+
 		for (auto& b : m_bullets) {
 			if (!b.alive) continue;
-			m_item.transform.posX = b.x;
-			m_item.transform.posY = b.y;
+			m_item.transform.posX = b.px + (b.x - b.px) * t;
+			m_item.transform.posY = b.py + (b.y - b.py) * t;
 			const float ang = std::atan2(b.vy, b.vx);
 			m_item.transform.rotation = ang;
 			m_item.transform.scaleX = length;
