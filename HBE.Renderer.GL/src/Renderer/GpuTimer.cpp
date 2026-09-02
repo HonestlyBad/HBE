@@ -122,7 +122,15 @@ namespace HBE::Renderer::GpuTimer
             return false;
         }
 
+        // Prefer the ARB extension flag if the loader exposes it, but the
+        // vendored glad only knows GL 3.3 core (which already includes
+        // glQueryCounter / glGetQueryObjectui64v). Fall back to that so the
+        // engine builds against either glad configuration.
+#ifdef GLAD_GL_ARB_timer_query
         const bool haveExt = (GLAD_GL_ARB_timer_query != 0) || (GLAD_GL_VERSION_3_3 != 0);
+#else
+        const bool haveExt = (GLAD_GL_VERSION_3_3 != 0);
+#endif
         const bool haveFuncs =
             (glGenQueries != nullptr) &&
             (glDeleteQueries != nullptr) &&

@@ -48,6 +48,17 @@ namespace hbmm::SceneIO {
             e["spacing"] = t.spacing;
             e["solidTiles"] = json::array();
             for (int id : t.solidTiles) e["solidTiles"].push_back(id);
+            e["oneWayTiles"] = json::array();
+            for (int id : t.oneWayTiles) e["oneWayTiles"].push_back(id);
+            // Slopes stored as { "12": "left", "13": "right" } — same shape the
+            // engine loader consumes, so no re-encoding needed on export.
+            json slopes = json::object();
+            for (const auto& [id, kind] : t.slopes) {
+                slopes[std::to_string(id)] = (kind == SlopeType::LeftUp)  ? "left"
+                                           : (kind == SlopeType::RightUp) ? "right"
+                                                                          : "none";
+            }
+            e["slopes"] = std::move(slopes);
             jts.push_back(std::move(e));
         }
         j["tilesets"] = std::move(jts);
@@ -120,6 +131,18 @@ namespace hbmm::SceneIO {
                 t.spacing = e.value("spacing", 0);
                 if (e.contains("solidTiles") && e["solidTiles"].is_array())
                     for (const auto& v : e["solidTiles"]) t.solidTiles.insert((int)v);
+                if (e.contains("oneWayTiles") && e["oneWayTiles"].is_array())
+                    for (const auto& v : e["oneWayTiles"]) t.oneWayTiles.insert((int)v);
+                if (e.contains("slopes") && e["slopes"].is_object()) {
+                    for (auto it = e["slopes"].begin(); it != e["slopes"].end(); ++it) {
+                        int id = 0;
+                        try { id = std::stoi(it.key()); } catch (...) { continue; }
+                        std::string s = it.value().is_string() ? (std::string)it.value() : std::string{};
+                        for (auto& c : s) c = (char)std::tolower((unsigned char)c);
+                        if (s == "left"  || s == "leftup"  || s == "/")  t.slopes[id] = SlopeType::LeftUp;
+                        else if (s == "right" || s == "rightup" || s == "\\") t.slopes[id] = SlopeType::RightUp;
+                    }
+                }
                 d.tilesets.push_back(std::move(t));
             }
         }
@@ -173,6 +196,21 @@ namespace hbmm::SceneIO {
             e["spacing"] = t.spacing;
             e["solidTiles"] = json::array();
             for (int id : t.solidTiles) e["solidTiles"].push_back(id);
+            if (!t.oneWayTiles.empty()) {
+                e["oneWayTiles"] = json::array();
+                for (int id : t.oneWayTiles) e["oneWayTiles"].push_back(id);
+            }
+            if (!t.slopes.empty()) {
+                // Object form { "12": "left", ... } — the TileMapLoader accepts
+                // both string ("left"/"right") and numeric (1/2) values; strings
+                // are self-documenting so we prefer them.
+                json slopes = json::object();
+                for (const auto& [id, kind] : t.slopes) {
+                    if (kind == SlopeType::LeftUp)  slopes[std::to_string(id)] = "left";
+                    else if (kind == SlopeType::RightUp) slopes[std::to_string(id)] = "right";
+                }
+                if (!slopes.empty()) e["slopes"] = std::move(slopes);
+            }
             jts.push_back(std::move(e));
         }
         j["tilesets"] = std::move(jts);

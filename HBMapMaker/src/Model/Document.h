@@ -9,11 +9,19 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
 
 namespace hbmm {
+
+    // Slope classification for a tile. Mirrors HBE::Renderer::SlopeType so the
+    // editor can author the same values the engine loader consumes.
+    //   None    — regular tile (default)
+    //   LeftUp  — surface rises left -> right ( / )
+    //   RightUp — surface rises right -> left ( \ )
+    enum class SlopeType : std::uint8_t { None = 0, LeftUp = 1, RightUp = 2 };
 
     // An imported spritesheet sliced into a uniform grid of tiles.
     struct Tileset {
@@ -25,7 +33,10 @@ namespace hbmm {
         int margin = 0;                  // border around the whole sheet
         int spacing = 0;                 // gap between tiles
 
-        std::set<int> solidTiles;        // 1-based ids flagged solid (gameplay meta)
+        // ---- gameplay meta (1-based tile ids, matches TileMapLoader schema)
+        std::set<int> solidTiles;        // fully solid, all sides
+        std::set<int> oneWayTiles;       // jump-through platforms (top only)
+        std::map<int, SlopeType> slopes; // per-tile slope overrides
 
         // ---- runtime (not part of the on-disk identity; rebuilt from sourcePath)
         std::uint32_t glTexId = 0;       // GL texture id (owned by ResourceCache)

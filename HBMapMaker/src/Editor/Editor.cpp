@@ -490,6 +490,11 @@ namespace hbmm {
         ImGui::Text("Selected: tileset %d, tile %d", m_selectedTileset, m_selectedTileId);
         if (!m_clip.empty())
             ImGui::Text("Clipboard: %dx%d", m_clipW, m_clipH);
+        ImGui::Separator();
+        ImGui::TextDisabled("Palette badges:");
+        ImGui::TextColored(ImVec4(0.94f, 0.27f, 0.27f, 1), "  Red  \xe2\x96\xa0 solid");
+        ImGui::TextColored(ImVec4(0.27f, 0.82f, 0.94f, 1), "  Cyan \xe2\x96\xa0 one-way");
+        ImGui::TextColored(ImVec4(0.94f, 0.86f, 0.24f, 1), "  Yel  \xe2\x96\xa0 slope");
         ImGui::End();
     }
 
@@ -557,12 +562,34 @@ namespace hbmm {
                     ImVec2 uv0, uv1; subUV(t.texW, t.texH, px, py, t.tileW, t.tileH, uv0, uv1);
                     ImGui::PushID(idx);
                     bool clicked = ImGui::ImageButton("tile", (ImTextureID)t.glTexId, sz, uv0, uv1);
-                    if (m_selectedTileId == idx + 1) {
-                        ImGui::GetWindowDrawList()->AddRect(
-                            ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                    const ImVec2 rmin = ImGui::GetItemRectMin();
+                    const ImVec2 rmax = ImGui::GetItemRectMax();
+                    const int tileId = idx + 1;
+
+                    // Gameplay-meta corner badges: solid = red, one-way = cyan,
+                    // slope = yellow. Kept tiny so the tile art stays legible.
+                    ImDrawList* pdl = ImGui::GetWindowDrawList();
+                    if (t.solidTiles.count(tileId)) {
+                        pdl->AddRectFilled(rmin,
+                            ImVec2(rmin.x + 5, rmin.y + 5),
+                            IM_COL32(240, 70, 70, 230));
+                    }
+                    if (t.oneWayTiles.count(tileId)) {
+                        pdl->AddRectFilled(ImVec2(rmax.x - 5, rmin.y),
+                            ImVec2(rmax.x, rmin.y + 5),
+                            IM_COL32(70, 210, 240, 230));
+                    }
+                    if (t.slopes.count(tileId)) {
+                        pdl->AddRectFilled(ImVec2(rmin.x, rmax.y - 5),
+                            ImVec2(rmin.x + 5, rmax.y),
+                            IM_COL32(240, 220, 60, 230));
+                    }
+
+                    if (m_selectedTileId == tileId) {
+                        pdl->AddRect(rmin, rmax,
                             IM_COL32(255, 210, 40, 255), 0.0f, 0, 2.5f);
                     }
-                    if (clicked) { m_selectedTileId = idx + 1; if (m_tool == Tool::Eraser) m_tool = Tool::Brush; }
+                    if (clicked) { m_selectedTileId = tileId; if (m_tool == Tool::Eraser) m_tool = Tool::Brush; }
                     ImGui::PopID();
                     if ((idx + 1) % perRow != 0) ImGui::SameLine();
                 }
@@ -657,10 +684,34 @@ namespace hbmm {
         ImGui::TextUnformatted("Selected tile");
         if (m_selectedTileset >= 0 && m_selectedTileset < (int)m_doc.tilesets.size() && m_selectedTileId > 0) {
             auto& t = m_doc.tilesets[m_selectedTileset];
-            bool solid = t.solidTiles.count(m_selectedTileId) > 0;
+            const int id = m_selectedTileId;
+
+            bool solid = t.solidTiles.count(id) > 0;
             if (ImGui::Checkbox("Solid (collision)", &solid)) {
-                if (solid) t.solidTiles.insert(m_selectedTileId);
-                else t.solidTiles.erase(m_selectedTileId);
+                if (solid) t.solidTiles.insert(id);
+                else t.solidTiles.erase(id);
+            }
+
+            bool oneWay = t.oneWayTiles.count(id) > 0;
+            if (ImGui::Checkbox("One-way platform (jump-through)", &oneWay)) {
+                if (oneWay) t.oneWayTiles.insert(id);
+                else t.oneWayTiles.erase(id);
+            }
+
+            // Slope override: None / Left ( / ) / Right ( \ ).
+            auto slopeIt = t.slopes.find(id);
+            int slopeMode = (slopeIt == t.slopes.end())
+                ? 0
+                : (slopeIt->second == SlopeType::LeftUp ? 1 : 2);
+            const int prevSlopeMode = slopeMode;
+            ImGui::TextUnformatted("Slope");
+            ImGui::SameLine();
+            ImGui::RadioButton("None##slope", &slopeMode, 0); ImGui::SameLine();
+            ImGui::RadioButton("Left  /##slope", &slopeMode, 1); ImGui::SameLine();
+            ImGui::RadioButton("Right \\##slope", &slopeMode, 2);
+            if (slopeMode != prevSlopeMode) {
+                if (slopeMode == 0) t.slopes.erase(id);
+                else t.slopes[id] = (slopeMode == 1) ? SlopeType::LeftUp : SlopeType::RightUp;
             }
         } else {
             ImGui::TextDisabled("None");
